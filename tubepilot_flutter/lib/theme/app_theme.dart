@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const purple = Color(0xFF7C3AED);
-  static const purpleLight = Color(0xFFA78BFA);
-  static const pink = Color(0xFFEC4899);
+  // Brand palette — deep teal / navy (previously purple/pink)
+  static const purple = Color(0xFF0A7075);       // primary accent (was purple)
+  static const purpleLight = Color(0xFF0C969C);  // lighter accent (was purpleLight)
+  static const pink = Color(0xFF274D60);         // secondary / gradient end (was pink)
   static const green = Color(0xFF22C55E);
   static const red = Color(0xFFEF4444);
   static const diamond = Color(0xFF38BDF8);
@@ -11,24 +12,24 @@ class AppColors {
   static const gradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [purple, pink],
+    colors: [purpleLight, pink],
   );
 
-  // Light theme surface colors
-  static const lightBg = Color(0xFFF7F6FB);
+  // Light theme surface colors — subtle teal tint instead of purple tint
+  static const lightBg = Color(0xFFF4FAFA);
   static const lightCard = Color(0xFFFFFFFF);
-  static const lightCard2 = Color(0xFFF1EEFB);
-  static const lightBorder = Color(0xFFE6E1F5);
-  static const lightText = Color(0xFF1B1730);
-  static const lightTextDim = Color(0xFF716C8C);
+  static const lightCard2 = Color(0xFFE9F5F5);
+  static const lightBorder = Color(0xFFD9EAEA);
+  static const lightText = Color(0xFF102425);
+  static const lightTextDim = Color(0xFF5C7677);
 
-  // Dark theme surface colors
-  static const darkBg = Color(0xFF0D0B1A);
-  static const darkCard = Color(0xFF17142B);
-  static const darkCard2 = Color(0xFF1E1A38);
-  static const darkBorder = Color(0xFF2A2547);
-  static const darkText = Color(0xFFF5F3FF);
-  static const darkTextDim = Color(0xFF9891B5);
+  // Dark theme surface colors — pure black background as requested
+  static const darkBg = Color(0xFF000000);
+  static const darkCard = Color(0xFF0D0D0D);
+  static const darkCard2 = Color(0xFF1A1A1A);
+  static const darkBorder = Color(0xFF262626);
+  static const darkText = Color(0xFFF2F2F2);
+  static const darkTextDim = Color(0xFF9AA0A6);
 }
 
 class AppTheme {

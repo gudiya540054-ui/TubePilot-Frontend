@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -35,6 +36,17 @@ class _UploadScreenState extends State<UploadScreen> {
     '20': 'Gaming', '24': 'Entertainment', '10': 'Music', '26': 'Howto & Style',
   };
 
+  final audienceLabels = const {
+    'not_for_kids': 'Not made for kids',
+    'made_for_kids': 'Made for kids',
+  };
+
+  final privacyLabels = const {
+    'unlisted': 'Unlisted',
+    'public': 'Public',
+    'private': 'Private',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +75,105 @@ class _UploadScreenState extends State<UploadScreen> {
     if (img != null) setState(() => thumbFile = File(img.path));
   }
 
+  // Bottom-sheet option picker used for Audience and Privacy — replaces the
+  // old full-screen Material dropdown menu with a compact, scrollable sheet.
+  Future<String?> _showOptionPicker({required String title, required Map<String, String> options, required String current}) {
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(top: 12, bottom: 12),
+                    decoration: BoxDecoration(color: context.surfaces.border, borderRadius: BorderRadius.circular(999)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(height: 4),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: options.entries.map((e) {
+                      final selected = e.key == current;
+                      return ListTile(
+                        title: Text(e.value, style: TextStyle(fontWeight: selected ? FontWeight.w700 : FontWeight.w400)),
+                        trailing: selected ? const Icon(Icons.check_circle, color: AppColors.purple, size: 20) : null,
+                        onTap: () => Navigator.pop(sheetContext, e.key),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Scrollable wheel-style time picker (Cupertino), shown in a compact bottom
+  // sheet instead of the bulky Material clock-dial dialog.
+  Future<TimeOfDay?> _pickTimeWheel() async {
+    TimeOfDay selected = TimeOfDay.now();
+    return showModalBottomSheet<TimeOfDay>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 12),
+                  decoration: BoxDecoration(color: context.surfaces.border, borderRadius: BorderRadius.circular(999)),
+                ),
+              ),
+              const Text('Select Time', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              SizedBox(
+                height: 216,
+                child: CupertinoTheme(
+                  data: CupertinoThemeData(
+                    brightness: Theme.of(context).brightness,
+                    textTheme: CupertinoTextThemeData(dateTimePickerTextStyle: TextStyle(color: context.surfaces.textDim.a > 0 ? null : null)),
+                  ),
+                  child: CupertinoDatePicker(
+                    mode: CupertinoDatePickerMode.time,
+                    initialDateTime: DateTime.now(),
+                    use24hFormat: false,
+                    onDateTimeChanged: (dt) => selected = TimeOfDay(hour: dt.hour, minute: dt.minute),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: GradientButton(label: 'Confirm', onPressed: () => Navigator.pop(sheetContext, selected)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _pickSchedule() async {
     final date = await showDatePicker(
       context: context,
@@ -71,8 +182,8 @@ class _UploadScreenState extends State<UploadScreen> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (date == null || !mounted) return;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-    if (time == null) return;
+    final time = await _pickTimeWheel();
+    if (time == null || !mounted) return;
     setState(() => scheduledAt = DateTime(date.year, date.month, date.day, time.hour, time.minute));
   }
 
@@ -134,6 +245,11 @@ class _UploadScreenState extends State<UploadScreen> {
         files.add(await http.MultipartFile.fromPath('thumbnail', thumbFile!.path, contentType: MediaType.parse(thumbMime)));
       }
 
+      // Schedule Time only ever means "when to go public" — and that only
+      // applies when Privacy is 'public'. For unlisted/private it's ignored
+      // (the field is hidden in the UI for those cases, see build() below).
+      final effectiveScheduledAt = privacyStatus == 'public' ? scheduledAt : null;
+
       final fields = {
         'title': _titleCtrl.text.trim(),
         'description': _descCtrl.text,
@@ -142,7 +258,7 @@ class _UploadScreenState extends State<UploadScreen> {
         'playlist': _playlistCtrl.text,
         'audience': audience,
         'privacyStatus': privacyStatus,
-        if (scheduledAt != null) 'scheduledAt': scheduledAt!.toUtc().toIso8601String(),
+        if (effectiveScheduledAt != null) 'scheduledAt': effectiveScheduledAt.toUtc().toIso8601String(),
       };
 
       await ApiService.instance.uploadMultipart('/videos/upload', fields: fields, files: files);
@@ -165,7 +281,9 @@ class _UploadScreenState extends State<UploadScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Upload Video')),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        // Extra bottom padding (110) keeps the Upload button clear of the
+        // floating pill nav bar instead of being hidden behind it.
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
         children: [
           GestureDetector(
             onTap: _pickVideo,
@@ -236,47 +354,51 @@ class _UploadScreenState extends State<UploadScreen> {
 
           Text('Audience', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
           const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            initialValue: audience,
-            items: const [
-              DropdownMenuItem(value: 'not_for_kids', child: Text('Not made for kids')),
-              DropdownMenuItem(value: 'made_for_kids', child: Text('Made for kids')),
-            ],
-            onChanged: (v) => setState(() => audience = v ?? 'not_for_kids'),
+          _pickerField(
+            value: audienceLabels[audience] ?? '',
+            onTap: () async {
+              final result = await _showOptionPicker(title: 'Audience', options: audienceLabels, current: audience);
+              if (result != null) setState(() => audience = result);
+            },
           ),
           const SizedBox(height: 14),
 
           Text('Privacy', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
           const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            initialValue: privacyStatus,
-            items: const [
-              DropdownMenuItem(value: 'public', child: Text('Public')),
-              DropdownMenuItem(value: 'unlisted', child: Text('Unlisted')),
-              DropdownMenuItem(value: 'private', child: Text('Private')),
-            ],
-            onChanged: (v) => setState(() => privacyStatus = v ?? 'public'),
+          _pickerField(
+            value: privacyLabels[privacyStatus] ?? '',
+            onTap: () async {
+              final result = await _showOptionPicker(title: 'Privacy', options: privacyLabels, current: privacyStatus);
+              if (result != null) {
+                setState(() {
+                  privacyStatus = result;
+                  // Schedule Time only applies to 'public'. Clear any previously
+                  // picked time when switching away from it so a stale time can't
+                  // be sent for unlisted/private uploads.
+                  if (privacyStatus != 'public') scheduledAt = null;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 4),
+          Text(
+            privacyStatus == 'public'
+                ? 'Video uploads immediately. Leave Schedule Time empty to go public right away, or pick a time below to upload as unlisted now and switch to public automatically at that time.'
+                : 'Video uploads immediately as "$privacyStatus" and stays that way.',
+            style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5),
           ),
           const SizedBox(height: 14),
 
-          Text('Schedule Time (optional)', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
-          const SizedBox(height: 4),
-          Text('Leave empty to upload right now, or pick when it should go live as "$privacyStatus"',
-              style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
-          const SizedBox(height: 6),
-          GestureDetector(
-            onTap: _pickSchedule,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(12)),
-              child: Text(
-                scheduledAt == null ? 'Upload now (tap to schedule instead)' : formatDateTime(scheduledAt!.toIso8601String()),
-                style: TextStyle(color: scheduledAt == null ? context.surfaces.textDim : null),
-              ),
+          if (privacyStatus == 'public') ...[
+            Text('Schedule Time (optional)', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+            const SizedBox(height: 6),
+            _pickerField(
+              value: scheduledAt == null ? 'Go public now (tap to schedule instead)' : formatDateTime(scheduledAt!.toIso8601String()),
+              isPlaceholder: scheduledAt == null,
+              onTap: _pickSchedule,
             ),
-          ),
-          const SizedBox(height: 18),
+            const SizedBox(height: 18),
+          ],
 
           Container(
             padding: const EdgeInsets.all(14),
@@ -290,6 +412,32 @@ class _UploadScreenState extends State<UploadScreen> {
           GradientButton(label: 'Upload', loading: uploading, onPressed: _submit),
           const SizedBox(height: 20),
         ],
+      ),
+    );
+  }
+
+  Widget _pickerField({required String value, required VoidCallback onTap, bool isPlaceholder = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontWeight: isPlaceholder ? FontWeight.w400 : FontWeight.w700,
+                  color: isPlaceholder ? context.surfaces.textDim : null,
+                ),
+              ),
+            ),
+            Icon(Icons.keyboard_arrow_down_rounded, color: context.surfaces.textDim),
+          ],
+        ),
       ),
     );
   }

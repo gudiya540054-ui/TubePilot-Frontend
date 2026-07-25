@@ -48,10 +48,10 @@ dependencies:
 
   # Video/image content-type detection for uploads (fixes "wrong file type"
   # rejections — the http package does NOT auto-detect mime types otherwise)
-  mime: ^1.0.6
+  mime: ^2.0.0
 
   # Sharing the referral code via the native share sheet
-  share_plus: ^10.0.2
+  share_plus: ^13.2.1
 
 dev_dependencies:
   flutter_test:

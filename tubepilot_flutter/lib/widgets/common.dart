@@ -160,26 +160,77 @@ class StatCard extends StatelessWidget {
   }
 }
 
-// ---------------- Bottom Nav ----------------
+// ---------------- Bottom Nav (floating pill, icon-only) ----------------
+// Same 5 tabs, same tap behavior as before. Text labels removed per request —
+// only icons are shown now, with a Tooltip carrying the label for accessibility
+// (long-press / screen readers still get the name, sighted users just see icons).
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
   const AppBottomNav({super.key, required this.currentIndex, required this.onTap});
 
+  static const List<({IconData filled, IconData outline, String label})> _items = [
+    (filled: Icons.home_rounded, outline: Icons.home_outlined, label: 'Home'),
+    (filled: Icons.cloud_upload_rounded, outline: Icons.cloud_upload_outlined, label: 'Upload'),
+    (filled: Icons.video_collection_rounded, outline: Icons.video_collection_outlined, label: 'Videos'),
+    (filled: Icons.insights_rounded, outline: Icons.insights_outlined, label: 'Analytics'),
+    (filled: Icons.person_rounded, outline: Icons.person_outline_rounded, label: 'Profile'),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: currentIndex,
-      onDestinationSelected: onTap,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      indicatorColor: AppColors.purple.withOpacity(0.15),
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home, color: AppColors.purple), label: 'Home'),
-        NavigationDestination(icon: Icon(Icons.upload_outlined), selectedIcon: Icon(Icons.upload, color: AppColors.purple), label: 'Upload'),
-        NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month, color: AppColors.purple), label: 'Videos'),
-        NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart, color: AppColors.purple), label: 'Analytics'),
-        NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person, color: AppColors.purple), label: 'Profile'),
-      ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Container(
+          height: 62,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(31),
+            border: Border.all(color: context.surfaces.border),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black.withOpacity(0.6) : AppColors.purple.withOpacity(0.14),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            children: List.generate(_items.length, (i) {
+              final item = _items[i];
+              final selected = i == currentIndex;
+              return Expanded(
+                child: Tooltip(
+                  message: item.label,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onTap(i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: selected ? AppColors.purple.withOpacity(isDark ? 0.25 : 0.12) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Icon(
+                        selected ? item.filled : item.outline,
+                        color: selected ? AppColors.purple : context.surfaces.textDim,
+                        size: 23,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
     );
   }
 }

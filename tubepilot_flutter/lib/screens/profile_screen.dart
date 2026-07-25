@@ -21,6 +21,15 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const _supportCategories = [
+    'Payment / Diamonds Issue',
+    'Video Upload Failed or Stuck',
+    'YouTube Connection Issue',
+    'Account / Login Issue',
+    'App Bug or Crash',
+    'Other',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -28,12 +37,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openSupport() async {
+    final category = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(color: context.surfaces.border, borderRadius: BorderRadius.circular(999)),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Text('What do you need help with?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(height: 6),
+                ..._supportCategories.map((c) => ListTile(
+                      title: Text(c, style: const TextStyle(fontSize: 14)),
+                      trailing: Icon(Icons.chevron_right, color: context.surfaces.textDim, size: 18),
+                      onTap: () => Navigator.pop(sheetContext, c),
+                    )),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (category == null || !mounted) return;
+    await _sendSupportEmail(category);
+  }
+
+  Future<void> _sendSupportEmail(String category) async {
     final user = context.read<AuthProvider>().user ?? {};
     final uri = Uri(
       scheme: 'mailto',
       path: 'anikkesharwani37@gmail.com',
-      query: 'subject=${Uri.encodeComponent('TubePilot Support Request')}'
-          '&body=${Uri.encodeComponent('User ID: ${user['userId'] ?? '-'}\nEmail: ${user['email'] ?? '-'}\n\nDescribe your issue below:\n')}',
+      query: 'subject=${Uri.encodeComponent('TubePilot Support: $category')}'
+          '&body=${Uri.encodeComponent('User ID: ${user['userId'] ?? '-'}\nEmail: ${user['email'] ?? '-'}\nCategory: $category\n\nDescribe your issue below:\n')}',
     );
     try {
       final launched = await launchUrl(uri);
@@ -71,7 +121,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile & Settings')),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        // Extra bottom padding (110) keeps the Logout button clear of the
+        // floating pill nav bar instead of being hidden behind it.
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
         children: [
           Center(
             child: Column(children: [

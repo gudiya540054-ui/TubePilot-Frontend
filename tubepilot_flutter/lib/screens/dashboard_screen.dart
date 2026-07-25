@@ -9,6 +9,7 @@ import 'analytics_screen.dart';
 import 'profile_screen.dart';
 import 'diamond_store_screen.dart';
 import 'notifications_screen.dart';
+import 'preview_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -30,6 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     return Scaffold(
+      extendBody: true, // lets body scroll behind the floating pill nav bar
       body: IndexedStack(index: _tabIndex, children: screens),
       bottomNavigationBar: AppBottomNav(currentIndex: _tabIndex, onTap: (i) => setState(() => _tabIndex = i)),
     );
@@ -53,19 +55,24 @@ class _DashboardHomeState extends State<_DashboardHome> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() => loading = true);
+  // showLoader=false is used for pull-to-refresh so existing content stays
+  // visible instead of flashing a full-screen spinner — feels faster.
+  // Both API calls also now run in parallel instead of sequentially.
+  Future<void> _load({bool showLoader = true}) async {
+    if (showLoader) setState(() => loading = true);
     try {
-      final res = await ApiService.instance.dashboard();
-      final notifRes = await ApiService.instance.getNotifications();
+      final results = await Future.wait([
+        ApiService.instance.dashboard(),
+        ApiService.instance.getNotifications(),
+      ]);
       setState(() {
-        data = res['data'];
-        unreadCount = notifRes['unreadCount'] ?? 0;
+        data = results[0]['data'];
+        unreadCount = results[1]['unreadCount'] ?? 0;
       });
     } catch (e) {
       if (mounted) showApiError(context, e);
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (showLoader && mounted) setState(() => loading = false);
     }
   }
 
@@ -79,6 +86,13 @@ class _DashboardHomeState extends State<_DashboardHome> {
     } catch (e) {
       if (mounted) showApiError(context, e);
     }
+  }
+
+  void _openPreview(Map<String, dynamic> video) {
+    final storageUrl = video['storageUrl'] as String? ?? '';
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PreviewScreen(title: video['title'] ?? '', videoUrl: storageUrl),
+    ));
   }
 
   @override
@@ -102,9 +116,9 @@ class _DashboardHomeState extends State<_DashboardHome> {
       body: loading
           ? const LoadingView()
           : RefreshIndicator(
-              onRefresh: _load,
+              onRefresh: () => _load(showLoader: false),
               child: ListView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 100), // extra bottom space for floating nav
                 children: [
                   BalanceBanner(
                     balance: data?['diamondBalance'] ?? 0,
@@ -140,10 +154,10 @@ class _DashboardHomeState extends State<_DashboardHome> {
                     crossAxisSpacing: 12,
                     childAspectRatio: 1.9,
                     children: [
-                      _quickCard('Free Uploads', '${data?['remainingFreeUploads'] ?? 0}', () {}),
-                      _quickCard('Uploaded Videos', '${data?['totalUploadedVideos'] ?? 0}', () {}),
-                      _quickCard('Analytics', '📈', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
-                      _quickCard('Calendar', '📅', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UpcomingScreen()))),
+                      _quickCard(Icons.card_giftcard_rounded, 'Free Uploads', '${data?['remainingFreeUploads'] ?? 0}', () {}),
+                      _quickCard(Icons.cloud_done_rounded, 'Uploaded Videos', '${data?['totalUploadedVideos'] ?? 0}', () {}),
+                      _quickCard(Icons.trending_up_rounded, 'Analytics', '', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
+                      _quickCard(Icons.calendar_month_rounded, 'Calendar', '', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UpcomingScreen()))),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -157,28 +171,58 @@ class _DashboardHomeState extends State<_DashboardHome> {
     );
   }
 
-  Widget _quickCard(String label, String value, VoidCallback onTap) {
+  Widget _quickCard(IconData icon, String label, String value, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: context.surfaces.card2, borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+        decoration: BoxDecoration(
+          color: context.surfaces.card2,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(color: AppColors.purple.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(label, style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
-            const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Container(
+              width: 38, height: 38,
+              decoration: BoxDecoration(color: AppColors.purple.withOpacity(0.14), borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: AppColors.purple, size: 19),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(label, style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (value.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
+  // A video is "upcoming" either while it's still being processed, or once
+  // it's uploaded-but-unlisted and waiting for its scheduled public-publish time.
   List<Widget> _buildUpcomingList() {
     final history = (data?['uploadHistory'] as List?) ?? [];
-    final upcoming = history.where((v) => ['scheduled', 'queued', 'processing'].contains(v['status'])).take(3).toList();
+    final upcoming = history.where((v) {
+      final status = v['status'];
+      if (['scheduled', 'queued', 'processing'].contains(status)) return true;
+      final isPendingPublicSwitch = status == 'uploaded' &&
+          v['targetPrivacyStatus'] == 'public' &&
+          v['privacyStatus'] != 'public';
+      return isPendingPublicSwitch;
+    }).take(3).toList();
 
     if (upcoming.isEmpty) {
       return [
@@ -190,33 +234,65 @@ class _DashboardHomeState extends State<_DashboardHome> {
       ];
     }
 
-    return upcoming.map<Widget>((v) => Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(14)),
-      child: Row(
-        children: [
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(color: context.surfaces.card2, borderRadius: BorderRadius.circular(10)),
-            child: const Center(child: Text('🎬', style: TextStyle(fontSize: 20))),
+    return upcoming.map<Widget>((v) {
+      final video = v as Map<String, dynamic>;
+      final thumbnailUrl = video['thumbnailUrl'] as String? ?? '';
+      final storageUrl = video['storageUrl'] as String? ?? '';
+      final canPreview = storageUrl.isNotEmpty;
+      final isPendingPublicSwitch = video['status'] == 'uploaded' &&
+          video['targetPrivacyStatus'] == 'public' &&
+          video['privacyStatus'] != 'public';
+
+      return GestureDetector(
+        onTap: canPreview ? () => _openPreview(video) : null,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: context.surfaces.border),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(color: AppColors.purple.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3)),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(v['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(v['scheduledAt'] != null ? formatDateTime(v['scheduledAt']) : 'Uploading soon', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
-                const SizedBox(height: 4),
-                AppBadge(label: '💎 ${v['diamondsCharged'] ?? 0} Diamond', color: AppColors.diamond),
-              ],
-            ),
+          child: Row(
+            children: [
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(color: AppColors.purple.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                clipBehavior: Clip.antiAlias,
+                child: thumbnailUrl.isNotEmpty
+                    ? Image.network(
+                        thumbnailUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.movie_creation_rounded, color: AppColors.purple, size: 22)),
+                      )
+                    : const Center(child: Icon(Icons.movie_creation_rounded, color: AppColors.purple, size: 22)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(video['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text(
+                      isPendingPublicSwitch
+                          ? 'Goes public: ${formatDateTime(video['scheduledAt'])}'
+                          : (video['scheduledAt'] != null ? formatDateTime(video['scheduledAt']) : 'Uploading soon'),
+                      style: TextStyle(color: context.surfaces.textDim, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    AppBadge(label: '💎 ${video['diamondsCharged'] ?? 0} Diamond', color: AppColors.diamond),
+                  ],
+                ),
+              ),
+              if (canPreview) Icon(Icons.play_circle_rounded, color: AppColors.purple, size: 26),
+            ],
           ),
-        ],
-      ),
-    )).toList();
+        ),
+      );
+    }).toList();
   }
 
   Widget _buildChannelCard() {

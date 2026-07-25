@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "179051847539",
+    "project_id": "tubepilot-48256",
+    "storage_bucket": "tubepilot-48256.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:179051847539:android:253f2f57cb04e4e9eb6f06",
+        "android_client_info": {
+          "package_name": "com.example.tubepilot_flutter"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "179051847539-1am66cjijaecorra4fb1ga9rpq9dmmc4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.tubepilot_flutter",
+            "certificate_hash": "9c32e22b18ee0d9700ac470b49f7addd0755ede6"
+          }
+        },
+        {
+          "client_id": "179051847539-rqn8vtp6ma7ub6dsggsnt2jvk73tuhq2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvFjPzrlaqdugm9d-q3PFbXQQiHV9RS3k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "179051847539-rqn8vtp6ma7ub6dsggsnt2jvk73tuhq2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
