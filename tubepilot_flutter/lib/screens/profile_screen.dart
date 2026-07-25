@@ -12,6 +12,9 @@ import 'notifications_screen.dart';
 import 'admin_screen.dart';
 import 'login_screen.dart';
 import 'refer_earn_screen.dart';
+import 'about_screen.dart';
+import 'privacy_policy_screen.dart';
+import 'rate_us_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool embedded;
@@ -121,8 +124,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile & Settings')),
       body: ListView(
-        // Extra bottom padding (110) keeps the Logout button clear of the
-        // floating pill nav bar instead of being hidden behind it.
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
         children: [
           Center(
@@ -169,23 +170,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
 
+          // Menu order: Buy Diamonds is now the first (most-used) action, followed
+          // by Subscription & Wallet and the rest. Each row now shows a small
+          // colored icon chip for a cleaner, one-item-per-line look.
           Container(
             decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
             child: Column(children: [
-              _menuRow(Icons.diamond_outlined, 'Subscription & Wallet', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletScreen()))),
+              _menuRow(Icons.shopping_bag_rounded, 'Buy Diamonds', AppColors.diamond,
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiamondStoreScreen()))),
               _divider(),
-              _menuRow(Icons.card_giftcard_outlined, 'Refer & Earn',
+              _menuRow(Icons.diamond_rounded, 'Subscription & Wallet', AppColors.purple,
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletScreen()))),
+              _divider(),
+              _menuRow(Icons.card_giftcard_rounded, 'Refer & Earn', AppColors.green,
                   () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReferEarnScreen()))),
               _divider(),
-              _menuRow(Icons.shopping_bag_outlined, 'Buy Diamonds', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiamondStoreScreen()))),
+              _menuRow(Icons.notifications_rounded, 'Notifications', AppColors.purpleLight,
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
               _divider(),
-              _menuRow(Icons.notifications_outlined, 'Notifications', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
-              _divider(),
-              _menuRow(Icons.help_outline, 'Help & Support', _openSupport),
+              _menuRow(Icons.help_rounded, 'Help & Support', AppColors.purple, _openSupport),
               if (auth.isAdmin) ...[
                 _divider(),
-                _menuRow(Icons.admin_panel_settings_outlined, 'Admin Panel', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminScreen()))),
+                _menuRow(Icons.admin_panel_settings_rounded, 'Admin Panel', AppColors.red,
+                    () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminScreen()))),
               ],
+            ]),
+          ),
+          const SizedBox(height: 12),
+
+          // App info group: About, Privacy Policy, Rate Us
+          Container(
+            decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
+            child: Column(children: [
+              _menuRow(Icons.info_rounded, 'About', AppColors.purpleLight,
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AboutScreen()))),
+              _divider(),
+              _menuRow(Icons.privacy_tip_rounded, 'Privacy Policy', AppColors.purple,
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()))),
+              _divider(),
+              _menuRow(Icons.star_rounded, 'Rate Us', AppColors.diamond,
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RateUsScreen()))),
             ]),
           ),
           const SizedBox(height: 12),
@@ -219,10 +243,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _menuRow(IconData icon, String label, VoidCallback onTap) {
+  Widget _menuRow(IconData icon, String label, Color color, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: context.surfaces.textDim, size: 20),
-      title: Text(label, style: const TextStyle(fontSize: 14)),
+      leading: Container(
+        width: 34, height: 34,
+        decoration: BoxDecoration(color: color.withOpacity(0.14), borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: color, size: 17),
+      ),
+      title: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
       trailing: Icon(Icons.chevron_right, color: context.surfaces.textDim),
       onTap: onTap,
     );
