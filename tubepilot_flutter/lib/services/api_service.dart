@@ -143,6 +143,9 @@ class ApiService {
         if (avatar != null) 'avatar': avatar,
       });
 
+  Future<Map<String, dynamic>> applyReferralCode(String referralCode) =>
+      _request('/auth/apply-referral', method: 'POST', body: {'referralCode': referralCode});
+
   // ---------------- Dashboard ----------------
   Future<Map<String, dynamic>> dashboard() => _request('/dashboard');
 

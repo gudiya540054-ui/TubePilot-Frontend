@@ -11,6 +11,7 @@ import 'diamond_store_screen.dart';
 import 'notifications_screen.dart';
 import 'admin_screen.dart';
 import 'login_screen.dart';
+import 'refer_earn_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool embedded;
@@ -24,6 +25,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => context.read<AuthProvider>().refreshUser());
+  }
+
+  Future<void> _openSupport() async {
+    final user = context.read<AuthProvider>().user ?? {};
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'anikkesharwani37@gmail.com',
+      query: 'subject=${Uri.encodeComponent('TubePilot Support Request')}'
+          '&body=${Uri.encodeComponent('User ID: ${user['userId'] ?? '-'}\nEmail: ${user['email'] ?? '-'}\n\nDescribe your issue below:\n')}',
+    );
+    try {
+      final launched = await launchUrl(uri);
+      if (!launched && mounted) {
+        showToast(context, 'No email app found. Contact anikkesharwani37@gmail.com directly.', isError: true);
+      }
+    } catch (_) {
+      if (mounted) showToast(context, 'No email app found. Contact anikkesharwani37@gmail.com directly.', isError: true);
+    }
   }
 
   Future<void> _connectYoutube() async {
@@ -77,7 +96,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Row(children: [
-                  const Text('📺', style: TextStyle(fontSize: 20)),
+                  channel != null && (channel['thumbnail'] ?? '').toString().isNotEmpty
+                      ? ClipOval(
+                          child: Image.network(
+                            channel['thumbnail'],
+                            width: 32, height: 32, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Text('📺', style: TextStyle(fontSize: 20)),
+                          ),
+                        )
+                      : const Text('📺', style: TextStyle(fontSize: 20)),
                   const SizedBox(width: 10),
                   Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(channel?['channelTitle'] ?? 'Connect Channel', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
@@ -95,13 +122,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(children: [
               _menuRow(Icons.diamond_outlined, 'Subscription & Wallet', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletScreen()))),
               _divider(),
-              _menuRow(Icons.card_giftcard_outlined, 'Refer & Earn (${user['referralCode'] ?? '-'})', () {}),
+              _menuRow(Icons.card_giftcard_outlined, 'Refer & Earn',
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReferEarnScreen()))),
               _divider(),
               _menuRow(Icons.shopping_bag_outlined, 'Buy Diamonds', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiamondStoreScreen()))),
               _divider(),
               _menuRow(Icons.notifications_outlined, 'Notifications', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
               _divider(),
-              _menuRow(Icons.help_outline, 'Help & Support', () => showToast(context, 'Contact support@tubepilot.com')),
+              _menuRow(Icons.help_outline, 'Help & Support', _openSupport),
               if (auth.isAdmin) ...[
                 _divider(),
                 _menuRow(Icons.admin_panel_settings_outlined, 'Admin Panel', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminScreen()))),

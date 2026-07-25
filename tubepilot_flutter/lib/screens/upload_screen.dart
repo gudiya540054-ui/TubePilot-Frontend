@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -51,10 +52,9 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   Future<void> _pickVideo() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.video);
-    if (result != null && result.files.single.path != null) {
-      setState(() => videoFile = File(result.files.single.path!));
-    }
+    final picker = ImagePicker();
+    final video = await picker.pickVideo(source: ImageSource.gallery);
+    if (video != null) setState(() => videoFile = File(video.path));
   }
 
   Future<void> _pickThumbnail() async {
@@ -125,8 +125,14 @@ class _UploadScreenState extends State<UploadScreen> {
 
     setState(() => uploading = true);
     try {
-      final files = [await http.MultipartFile.fromPath('video', videoFile!.path)];
-      if (thumbFile != null) files.add(await http.MultipartFile.fromPath('thumbnail', thumbFile!.path));
+      final videoMime = lookupMimeType(videoFile!.path) ?? 'video/mp4';
+      final files = [
+        await http.MultipartFile.fromPath('video', videoFile!.path, contentType: MediaType.parse(videoMime)),
+      ];
+      if (thumbFile != null) {
+        final thumbMime = lookupMimeType(thumbFile!.path) ?? 'image/jpeg';
+        files.add(await http.MultipartFile.fromPath('thumbnail', thumbFile!.path, contentType: MediaType.parse(thumbMime)));
+      }
 
       final fields = {
         'title': _titleCtrl.text.trim(),

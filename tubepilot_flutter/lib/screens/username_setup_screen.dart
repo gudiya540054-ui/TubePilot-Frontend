@@ -60,6 +60,64 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
   }
 
   // Step 1: Welcome + 20 free credits popup. Step 2: prompt to connect YouTube channel now.
+  Future<void> _showReferralDialog() async {
+    final referralCtrl = TextEditingController();
+    bool submitting = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text('Have a referral code?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Enter a friend\'s code and you\'ll both get 5 bonus diamonds.'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: referralCtrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(hintText: 'e.g. 102458XK9F2'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Skip'),
+            ),
+            ElevatedButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      final code = referralCtrl.text.trim();
+                      if (code.isEmpty) {
+                        Navigator.pop(dialogContext);
+                        return;
+                      }
+                      setDialogState(() => submitting = true);
+                      try {
+                        final res = await ApiService.instance.applyReferralCode(code);
+                        if (mounted) showToast(context, res['message'] ?? 'Referral applied!', isSuccess: true);
+                      } catch (e) {
+                        if (mounted) showApiError(context, e);
+                      } finally {
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      }
+                    },
+              child: submitting
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showWelcomeFlow() async {
     await showDialog(
       context: context,
@@ -67,12 +125,15 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text('Welcome to TubePilot! 🎉'),
-        content: const Text("You've got 20 free video upload credits to get started — no diamonds needed until they run out."),
+        content: const Text("You've got 20 free video upload credits and 10 bonus diamonds to get started."),
         actions: [
           ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Let\'s go')),
         ],
       ),
     );
+    if (!mounted) return;
+
+    await _showReferralDialog();
     if (!mounted) return;
 
     final connectNow = await showDialog<bool>(

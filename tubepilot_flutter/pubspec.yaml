@@ -29,9 +29,10 @@ dependencies:
   firebase_core: ^3.6.0
   firebase_messaging: ^15.1.3
 
-  # File pickers (video, thumbnail, screenshot)
+  # File pickers (thumbnail, video, and screenshot) - image_picker handles both
+  # images and video, so we don't need the separate file_picker package
+  # (which has a known Android build issue: "cannot find symbol FilePickerPlugin").
   image_picker: ^1.1.2
-  file_picker: ^8.0.6
 
   # Video preview
   video_player: ^2.9.1
@@ -44,6 +45,13 @@ dependencies:
 
   # Pull to refresh
   cached_network_image: ^3.3.1
+
+  # Video/image content-type detection for uploads (fixes "wrong file type"
+  # rejections — the http package does NOT auto-detect mime types otherwise)
+  mime: ^1.0.6
+
+  # Sharing the referral code via the native share sheet
+  share_plus: ^10.0.2
 
 dev_dependencies:
   flutter_test:

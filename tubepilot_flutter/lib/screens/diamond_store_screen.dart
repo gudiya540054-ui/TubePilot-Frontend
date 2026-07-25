@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -136,7 +138,10 @@ class _PaymentSheetState extends State<_PaymentSheet> {
     setState(() => submitting = true);
     try {
       final files = <http.MultipartFile>[];
-      if (screenshot != null) files.add(await http.MultipartFile.fromPath('screenshot', screenshot!.path));
+      if (screenshot != null) {
+        final mime = lookupMimeType(screenshot!.path) ?? 'image/jpeg';
+        files.add(await http.MultipartFile.fromPath('screenshot', screenshot!.path, contentType: MediaType.parse(mime)));
+      }
       await ApiService.instance.uploadMultipart('/diamonds/purchase-request',
           fields: {'diamondPackage': '${widget.diamonds}', 'utrNumber': _utrCtrl.text.trim()}, files: files);
       if (!mounted) return;

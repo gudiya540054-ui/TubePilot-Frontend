@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
@@ -19,11 +20,31 @@ class _LoginScreenState extends State<LoginScreen> {
   bool loading = false;
   bool googleLoading = false;
   bool obscurePassword = true;
+  String? slowServerHint;
+  Timer? _slowHintTimer;
 
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+
+  void _startSlowHintTimer() {
+    _slowHintTimer?.cancel();
+    _slowHintTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => slowServerHint = 'Waking up the server… this can take up to a minute on the first request.');
+    });
+  }
+
+  void _clearSlowHint() {
+    _slowHintTimer?.cancel();
+    if (mounted) setState(() => slowServerHint = null);
+  }
+
+  @override
+  void dispose() {
+    _slowHintTimer?.cancel();
+    super.dispose();
+  }
 
   void _goNext(Map<String, dynamic>? user) {
     final username = user?['username'];
@@ -35,6 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submitEmailAuth() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => loading = true);
+    _startSlowHintTimer();
     final auth = context.read<AuthProvider>();
     try {
       if (isLogin) {
@@ -48,12 +70,14 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) showApiError(context, e);
     } finally {
+      _clearSlowHint();
       if (mounted) setState(() => loading = false);
     }
   }
 
   Future<void> _submitGoogle() async {
     setState(() => googleLoading = true);
+    _startSlowHintTimer();
     final auth = context.read<AuthProvider>();
     try {
       await auth.googleLogin();
@@ -63,6 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) showApiError(context, e);
     } finally {
+      _clearSlowHint();
       if (mounted) setState(() => googleLoading = false);
     }
   }
@@ -185,6 +210,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     loading: loading,
                     onPressed: _submitEmailAuth,
                   ),
+                  if (slowServerHint != null) ...[
+                    const SizedBox(height: 10),
+                    Text(slowServerHint!, style: const TextStyle(color: AppColors.purpleLight, fontSize: 12), textAlign: TextAlign.center),
+                  ],
                   const SizedBox(height: 16),
 
                   Row(
