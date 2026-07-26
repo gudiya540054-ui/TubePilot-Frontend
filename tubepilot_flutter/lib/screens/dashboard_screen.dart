@@ -10,6 +10,7 @@ import 'profile_screen.dart';
 import 'diamond_store_screen.dart';
 import 'notifications_screen.dart';
 import 'preview_screen.dart';
+import 'rate_us_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -31,7 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     return Scaffold(
-      extendBody: true, // lets body scroll behind the floating pill nav bar
+      extendBody: true,
       body: IndexedStack(index: _tabIndex, children: screens),
       bottomNavigationBar: AppBottomNav(currentIndex: _tabIndex, onTap: (i) => setState(() => _tabIndex = i)),
     );
@@ -52,12 +53,13 @@ class _DashboardHomeState extends State<_DashboardHome> {
   @override
   void initState() {
     super.initState();
-    _load();
+    // Weekly Rate Us popup check runs once, right after the first successful
+    // load — not on pull-to-refresh (that only calls _load directly below).
+    _load().then((_) {
+      if (mounted) maybeShowRateUsPopup(context);
+    });
   }
 
-  // showLoader=false is used for pull-to-refresh so existing content stays
-  // visible instead of flashing a full-screen spinner — feels faster.
-  // Both API calls also now run in parallel instead of sequentially.
   Future<void> _load({bool showLoader = true}) async {
     if (showLoader) setState(() => loading = true);
     try {
@@ -118,7 +120,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
           : RefreshIndicator(
               onRefresh: () => _load(showLoader: false),
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 100), // extra bottom space for floating nav
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
                 children: [
                   BalanceBanner(
                     balance: data?['diamondBalance'] ?? 0,
@@ -211,8 +213,6 @@ class _DashboardHomeState extends State<_DashboardHome> {
     );
   }
 
-  // A video is "upcoming" either while it's still being processed, or once
-  // it's uploaded-but-unlisted and waiting for its scheduled public-publish time.
   List<Widget> _buildUpcomingList() {
     final history = (data?['uploadHistory'] as List?) ?? [];
     final upcoming = history.where((v) {

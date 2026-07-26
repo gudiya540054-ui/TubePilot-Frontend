@@ -90,10 +90,11 @@ class ApiService {
     required Map<String, String> fields,
     required List<http.MultipartFile> files,
     bool retry = true,
+    String method = 'POST',
   }) async {
     final token = await StorageService.getAccessToken();
     final uri = Uri.parse('${AppConfig.apiBaseUrl}$path');
-    final request = http.MultipartRequest('POST', uri);
+    final request = http.MultipartRequest(method, uri);
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     request.fields.addAll(fields);
     request.files.addAll(files);
@@ -110,7 +111,7 @@ class ApiService {
 
     if (res.statusCode == 401 && data['code'] == 'TOKEN_EXPIRED' && retry) {
       final refreshed = await _refreshAccessToken();
-      if (refreshed) return uploadMultipart(path, fields: fields, files: files, retry: false);
+      if (refreshed) return uploadMultipart(path, fields: fields, files: files, retry: false, method: method);
     }
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -187,6 +188,14 @@ class ApiService {
   // ---------------- Analytics ----------------
   Future<Map<String, dynamic>> getAnalytics() => _request('/analytics');
 
+  // ---------------- Ratings (Rate Us) ----------------
+  Future<Map<String, dynamic>> getRatingStatus() => _request('/ratings/status');
+  Future<Map<String, dynamic>> suggestRatingReview(int stars) => _request('/ratings/suggest?stars=$stars');
+  Future<Map<String, dynamic>> submitRating({required int stars, required String reviewText, required String email}) =>
+      _request('/ratings', method: 'POST', body: {'stars': stars, 'reviewText': reviewText, 'email': email});
+  Future<Map<String, dynamic>> dismissRating() => _request('/ratings/dismiss', method: 'POST');
+  Future<Map<String, dynamic>> getMyRating() => _request('/ratings/mine');
+
   // ---------------- Admin ----------------
   Future<Map<String, dynamic>> adminDashboard() => _request('/admin/dashboard');
   Future<Map<String, dynamic>> adminPayments({String? status}) =>
@@ -195,4 +204,45 @@ class ApiService {
   Future<Map<String, dynamic>> rejectPayment(String id, String note) =>
       _request('/admin/payments/$id/reject', method: 'PATCH', body: {'note': note});
   Future<Map<String, dynamic>> getAdminPaymentSettings() => _request('/admin/payment-settings');
+
+  /// Admin: list/search users
+  Future<Map<String, dynamic>> adminUsers({String? search}) => _request(
+      '/admin/users${search != null && search.trim().isNotEmpty ? '?search=${Uri.encodeQueryComponent(search.trim())}' : ''}');
+
+  /// Admin: force logout a user from all their devices
+  Future<Map<String, dynamic>> forceLogoutUser(String id) =>
+      _request('/admin/users/$id/force-logout', method: 'POST');
+
+  /// Admin: toggle a user's active/suspended status
+  Future<Map<String, dynamic>> toggleUserActive(String id) =>
+      _request('/admin/users/$id/toggle-active', method: 'PATCH');
+
+  /// Admin: update payment settings shown in the Diamond Store.
+  /// If [qrImagePath] is provided, uploads it as multipart along with the
+  /// other fields; otherwise sends a plain JSON PATCH request.
+  Future<Map<String, dynamic>> updatePaymentSettings({
+    required String upiId,
+    required String accountName,
+    required String merchantName,
+    String? qrImagePath,
+  }) async {
+    if (qrImagePath != null) {
+      final qrFile = await http.MultipartFile.fromPath('qrImage', qrImagePath);
+      return uploadMultipart(
+        '/admin/payment-settings',
+        method: 'PATCH',
+        fields: {
+          'upiId': upiId,
+          'accountName': accountName,
+          'merchantName': merchantName,
+        },
+        files: [qrFile],
+      );
+    }
+    return _request('/admin/payment-settings', method: 'PATCH', body: {
+      'upiId': upiId,
+      'accountName': accountName,
+      'merchantName': merchantName,
+    });
+  }
 }
