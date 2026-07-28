@@ -83,7 +83,21 @@ class _DashboardHomeState extends State<_DashboardHome> {
       final res = await ApiService.instance.getYoutubeOAuthUrl();
       final url = res['url'];
       if (url != null) {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        // Opens Google's consent screen in an in-app browser tab (Chrome
+        // Custom Tab on Android / SFSafariViewController on iOS) instead of
+        // switching out to the full external Chrome app. This avoids the
+        // slow app -> Chrome -> app switch that was causing the 1-3 minute
+        // perceived delay. The backend still redirects to the
+        // "tubepilot://oauth-success" deep link exactly as before, which
+        // main.dart already listens for — no change needed there.
+        await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.inAppWebView,
+          webViewConfiguration: const WebViewConfiguration(
+            enableJavaScript: true,
+            enableDomStorage: true,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) showApiError(context, e);

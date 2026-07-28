@@ -155,6 +155,19 @@ class ApiService {
   Future<Map<String, dynamic>> getYoutubeChannel() => _request('/youtube/channel');
   Future<Map<String, dynamic>> disconnectYoutube() => _request('/youtube/disconnect', method: 'DELETE');
 
+  // ---------------- Google Drive ----------------
+  Future<Map<String, dynamic>> getDriveOAuthUrl() => _request('/drive/oauth/url?platform=mobile');
+  Future<Map<String, dynamic>> getDriveStatus() => _request('/drive/status');
+  Future<Map<String, dynamic>> disconnectDrive() => _request('/drive/disconnect', method: 'DELETE');
+  Future<Map<String, dynamic>> updateDriveSettings({String? dailyUploadTime, String? folderId, String? folderName}) =>
+      _request('/drive/settings', method: 'PATCH', body: {
+        if (dailyUploadTime != null) 'dailyUploadTime': dailyUploadTime,
+        'folderId': folderId,
+        'folderName': folderName,
+      });
+  Future<Map<String, dynamic>> listDriveFolders({String? parentId}) =>
+      _request('/drive/folders${parentId != null ? '?parentId=$parentId' : ''}');
+
   // ---------------- Videos ----------------
   Future<Map<String, dynamic>> listVideos({String? status}) =>
       _request('/videos${status != null ? '?status=$status' : ''}');
@@ -178,13 +191,16 @@ class ApiService {
   Future<Map<String, dynamic>> aiTags(String topic) => _request('/ai/tags', method: 'POST', body: {'topic': topic});
 
   // ---------------- Notifications ----------------
+  // ---------------- Notifications ----------------
   Future<Map<String, dynamic>> getNotifications() => _request('/notifications');
   Future<Map<String, dynamic>> markNotificationRead(String id) =>
       _request('/notifications/$id/read', method: 'PATCH');
   Future<Map<String, dynamic>> markAllNotificationsRead() => _request('/notifications/read-all', method: 'PATCH');
   Future<Map<String, dynamic>> registerDeviceToken(String fcmToken) =>
       _request('/notifications/register-device', method: 'POST', body: {'fcmToken': fcmToken});
-
+  Future<Map<String, dynamic>> registerOneSignalPlayerId(String playerId) =>
+      _request('/notifications/register-onesignal-player', method: 'POST', body: {'playerId': playerId});
+      
   // ---------------- Analytics ----------------
   Future<Map<String, dynamic>> getAnalytics() => _request('/analytics');
 

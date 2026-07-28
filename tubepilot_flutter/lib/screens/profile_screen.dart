@@ -15,6 +15,7 @@ import 'refer_earn_screen.dart';
 import 'about_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'rate_us_screen.dart';
+import 'drive_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool embedded;
@@ -101,7 +102,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _connectYoutube() async {
     try {
       final res = await ApiService.instance.getYoutubeOAuthUrl();
-      if (res['url'] != null) await launchUrl(Uri.parse(res['url']), mode: LaunchMode.externalApplication);
+      final url = res['url'];
+      if (url != null) {
+        // In-app browser tab (Chrome Custom Tab / SFSafariViewController)
+        // instead of switching out to the full external Chrome app — this
+        // avoids the slow app -> Chrome -> app switch. The backend still
+        // redirects to the "tubepilot://oauth-success" deep link exactly as
+        // before, which main.dart already listens for.
+        await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.inAppWebView,
+          webViewConfiguration: const WebViewConfiguration(
+            enableJavaScript: true,
+            enableDomStorage: true,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
+    }
+  }
+
+  // Mirrors _connectYoutube but uses the device's external Chrome app (not an
+  // in-app WebView tab) so Google can use the device's already signed-in
+  // accounts and show the account picker directly — no manual email typing
+  // needed. The "tubepilot://oauth-success" deep link listener in main.dart
+  // brings the user right back once they pick an account and grant access.
+  Future<void> _connectDrive() async {
+    try {
+      final res = await ApiService.instance.getDriveOAuthUrl();
+      final url = res['url'];
+      if (url != null) {
+        await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+        );
+      }
     } catch (e) {
       if (mounted) showApiError(context, e);
     }
@@ -119,6 +155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final themeProvider = context.watch<ThemeProvider>();
     final user = auth.user ?? {};
     final channel = user['youtubeChannel'];
+    final drive = user['connectedDrive'];
     final avatar = user['avatar'];
 
     return Scaffold(
@@ -170,9 +207,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Menu order: Buy Diamonds is now the first (most-used) action, followed
-          // by Subscription & Wallet and the rest. Each row now shows a small
-          // colored icon chip for a cleaner, one-item-per-line look.
+          // Connect Drive card. Not connected -> starts OAuth. Connected ->
+          // opens the full Drive Settings screen (folder select/change,
+          // daily time, disconnect, connect another Drive).
+          GestureDetector(
+            onTap: drive == null
+                ? _connectDrive
+                : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DriveSettingsScreen())),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Row(children: [
+                  const Text('📁', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 10),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(
+                      drive == null ? 'Connect Drive' : (drive['displayName'] ?? drive['email'] ?? 'Drive Connected'),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    if (drive != null)
+                      Text(
+                        drive['dailyUploadTime'] != null ? 'Daily upload at ${drive['dailyUploadTime']}' : 'Tap to manage',
+                        style: TextStyle(color: context.surfaces.textDim, fontSize: 12),
+                      ),
+                  ]),
+                ]),
+                Text(drive == null ? 'Connect ›' : 'Manage ›', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 12),
+
           Container(
             decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
             child: Column(children: [
@@ -198,7 +264,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
 
-          // App info group: About, Privacy Policy, Rate Us
           Container(
             decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
             child: Column(children: [
