@@ -213,8 +213,9 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
-  // Bottom-sheet option picker used for Audience and Privacy — replaces the
-  // old full-screen Material dropdown menu with a compact, scrollable sheet.
+  // Bottom-sheet option picker used for Category, Audience, and Privacy —
+  // replaces the old full-screen Material dropdown menu with a compact,
+  // scrollable sheet.
   Future<String?> _showOptionPicker({required String title, required Map<String, String> options, required String current}) {
     return showModalBottomSheet<String>(
       context: context,
@@ -430,7 +431,7 @@ class _UploadScreenState extends State<UploadScreen> {
     );
   }
 
-  // ---------------- Single-video upload UI (unchanged) ----------------
+  // ---------------- Single-video upload UI ----------------
   Widget _buildSingleBody(String costLabel) {
     return ListView(
       // Extra bottom padding (110) keeps the Upload button clear of the
@@ -490,12 +491,18 @@ class _UploadScreenState extends State<UploadScreen> {
         ),
         const SizedBox(height: 14),
 
+        // Category — same bottom-sheet picker style as Audience/Privacy below
+        // (replaces the old Material DropdownButtonFormField, which rendered
+        // as a full-width overlay list that looked out of place with the
+        // rest of the form).
         Text('Category', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
         const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: category,
-          items: categories.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-          onChanged: (v) => setState(() => category = v ?? '22'),
+        _pickerField(
+          value: categories[category] ?? '',
+          onTap: () async {
+            final result = await _showOptionPicker(title: 'Category', options: categories, current: category);
+            if (result != null) setState(() => category = result);
+          },
         ),
         const SizedBox(height: 14),
 
@@ -567,7 +574,7 @@ class _UploadScreenState extends State<UploadScreen> {
     );
   }
 
-  // ---------------- Bulk upload UI (new) ----------------
+  // ---------------- Bulk upload UI ----------------
   Widget _buildBulkBody(String costLabel) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),

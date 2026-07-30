@@ -1,4 +1,4 @@
-name: tubepilot_flutter
+name: TubePilot
 description: "TubePilot - YouTube Auto Uploader & Scheduler"
 publish_to: 'none'
 version: 1.0.0+1
@@ -24,6 +24,12 @@ dependencies:
   google_sign_in: ^6.2.1
   url_launcher: ^6.3.0
   app_links: ^6.3.2
+
+  # Chrome Custom Tabs / SFSafariViewController for OAuth flows (YouTube +
+  # Google Drive connect). Faster than a full external-app switch and shares
+  # the device's existing Chrome/Google login session, so the account picker
+  # shows immediately instead of asking for a manually typed email.
+  flutter_custom_tabs: ^2.2.0
 
   # Push notifications (real phone notifications via Firebase Cloud Messaging)
   firebase_core: ^3.6.0
@@ -64,8 +70,27 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
 
+  # Generates the app's home-screen launcher icon (Android + iOS) from
+  # assets/icon.png at build time. Dev-only — not bundled into the app.
+  flutter_launcher_icons: ^0.14.1
+
 flutter:
   uses-material-design: true
   assets:
     - assets/companylogo.png
     - assets/signature.png
+    - assets/icon.png
+    - assets/splash.png
+
+# Config for flutter_launcher_icons — reads assets/icon.png and generates all
+# required Android (mipmap) and iOS (AppIcon.appiconset) sizes automatically.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon.png"
+  # Android 13+ adaptive icon — same source image used for the foreground,
+  # with a solid background color behind it. Change background color if you
+  # want it to match your brand instead of white.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon.png"
+  remove_alpha_ios: true

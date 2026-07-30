@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_custom_tabs/flutter_custom_tabs.dart' as custom_tabs;
 import '../services/auth_provider.dart';
 import '../services/api_service.dart';
 import '../providers/theme_provider.dart';
@@ -99,22 +100,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // Opens a Chrome Custom Tab / SFSafariViewController instead of a full
+  // external-app switch OR an isolated in-app WebView. This shares the
+  // device's existing Chrome/Google session (so Google shows the account
+  // picker immediately — no manual email typing) while staying visually
+  // "inside" the app (overlay tab, no full app switch, feels fast). The
+  // backend still redirects to the "tubepilot://oauth-success" deep link
+  // exactly as before, which main.dart already listens for.
   Future<void> _connectYoutube() async {
     try {
       final res = await ApiService.instance.getYoutubeOAuthUrl();
       final url = res['url'];
       if (url != null) {
-        // In-app browser tab (Chrome Custom Tab / SFSafariViewController)
-        // instead of switching out to the full external Chrome app — this
-        // avoids the slow app -> Chrome -> app switch. The backend still
-        // redirects to the "tubepilot://oauth-success" deep link exactly as
-        // before, which main.dart already listens for.
-        await launchUrl(
+        await custom_tabs.launchUrl(
           Uri.parse(url),
-          mode: LaunchMode.inAppWebView,
-          webViewConfiguration: const WebViewConfiguration(
-            enableJavaScript: true,
-            enableDomStorage: true,
+          customTabsOptions: custom_tabs.CustomTabsOptions(
+            shareState: custom_tabs.CustomTabsShareState.off,
+            urlBarHidingEnabled: true,
+            showTitle: true,
+          ),
+          safariVCOptions: const custom_tabs.SafariViewControllerOptions(
+            barCollapsingEnabled: true,
+            dismissButtonStyle: custom_tabs.SafariViewControllerDismissButtonStyle.close,
           ),
         );
       }
@@ -123,19 +130,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // Mirrors _connectYoutube but uses the device's external Chrome app (not an
-  // in-app WebView tab) so Google can use the device's already signed-in
-  // accounts and show the account picker directly — no manual email typing
-  // needed. The "tubepilot://oauth-success" deep link listener in main.dart
-  // brings the user right back once they pick an account and grant access.
+  // Mirrors _connectYoutube — same Custom Tabs approach for Google Drive.
   Future<void> _connectDrive() async {
     try {
       final res = await ApiService.instance.getDriveOAuthUrl();
       final url = res['url'];
       if (url != null) {
-        await launchUrl(
+        await custom_tabs.launchUrl(
           Uri.parse(url),
-          mode: LaunchMode.externalApplication,
+          customTabsOptions: custom_tabs.CustomTabsOptions(
+            shareState: custom_tabs.CustomTabsShareState.off,
+            urlBarHidingEnabled: true,
+            showTitle: true,
+          ),
+          safariVCOptions: const custom_tabs.SafariViewControllerOptions(
+            barCollapsingEnabled: true,
+            dismissButtonStyle: custom_tabs.SafariViewControllerDismissButtonStyle.close,
+          ),
         );
       }
     } catch (e) {

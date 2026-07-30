@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_custom_tabs/flutter_custom_tabs.dart' as custom_tabs;
 import '../services/api_service.dart';
 import '../services/auth_provider.dart';
 import '../theme/app_theme.dart';
@@ -108,6 +108,10 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     }
   }
 
+  // Uses the same Chrome Custom Tab / SFSafariViewController approach as
+  // profile_screen.dart's _connectYoutube/_connectDrive — fast, shares the
+  // device's Chrome/Google session (account picker shows instantly), and
+  // stays visually inside the app instead of a full external-app switch.
   Future<void> _connectAnotherDrive() async {
     if (_nextConnectCost > 0) {
       final confirm = await showDialog<bool>(
@@ -127,7 +131,18 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
       final res = await ApiService.instance.getDriveOAuthUrl();
       final url = res['url'];
       if (url != null) {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        await custom_tabs.launchUrl(
+          Uri.parse(url),
+          customTabsOptions: custom_tabs.CustomTabsOptions(
+            shareState: custom_tabs.CustomTabsShareState.off,
+            urlBarHidingEnabled: true,
+            showTitle: true,
+          ),
+          safariVCOptions: const custom_tabs.SafariViewControllerOptions(
+            barCollapsingEnabled: true,
+            dismissButtonStyle: custom_tabs.SafariViewControllerDismissButtonStyle.close,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) showApiError(context, e);

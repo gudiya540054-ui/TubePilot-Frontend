@@ -115,7 +115,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('YT Uploader'),
+        title: const Text('TubePilot'),
         actions: [
           Stack(
             children: [
