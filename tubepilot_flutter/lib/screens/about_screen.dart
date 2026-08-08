@@ -5,33 +5,38 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   // Core feature list — kept in sync with what the app actually does today:
-  // manual + bulk YouTube upload, Drive auto-upload, AI content tools,
-  // scheduling, and real-time notifications.
+  // multi-platform publishing (YouTube, Instagram Reels, Facebook Reels),
+  // Drive auto-upload, AI content tools, scheduling, and notifications.
   static const _features = [
     _Feature(
       icon: Icons.cloud_upload_rounded,
-      title: 'Direct YouTube Upload',
-      description: 'Upload single or multiple videos to YouTube straight from your phone — no desktop or laptop needed.',
+      title: 'Multi-Platform Publishing',
+      description: 'Upload once and publish to YouTube, Instagram Reels, and Facebook Reels — straight from your phone, no desktop needed.',
     ),
     _Feature(
       icon: Icons.folder_special_rounded,
       title: 'Google Drive Auto-Upload',
-      description: 'Connect your Google Drive, pick a daily time, and TubePilot automatically uploads your next pending video to YouTube every day — completely hands-free.',
+      description: 'Connect your Google Drive, pick a daily time, and Tube Pilot automatically uploads your next pending video to YouTube every day — completely hands-free.',
+    ),
+    _Feature(
+      icon: Icons.schedule_send_rounded,
+      title: 'Flexible Cross-Platform Scheduling',
+      description: 'Publish everywhere at the same time, or set an independent schedule for each platform — you choose.',
     ),
     _Feature(
       icon: Icons.auto_awesome_rounded,
-      title: 'AI-Generated Titles, Descriptions & Tags',
-      description: 'Skip the writer\'s block — generate optimized titles, descriptions, and tags for every video in seconds.',
+      title: 'AI-Generated Titles, Captions & Hashtags',
+      description: 'Skip the writer\'s block — generate optimized YouTube titles/tags and platform-specific Instagram/Facebook captions and hashtags in seconds.',
     ),
     _Feature(
       icon: Icons.lock_clock_rounded,
       title: 'Flexible Privacy & Scheduling',
-      description: 'Upload as Public, Unlisted, or Private, with automatic "go public" scheduling for videos you want to release later.',
+      description: 'Upload as Public, Unlisted, or Private on YouTube, with automatic "go public" scheduling for videos you want to release later.',
     ),
     _Feature(
       icon: Icons.notifications_active_rounded,
       title: 'Real-Time Push Notifications',
-      description: 'Get notified the instant your video finishes uploading, goes live, or if an upload needs your attention.',
+      description: 'Get notified the instant each platform finishes publishing your video, or if an upload needs your attention.',
     ),
     _Feature(
       icon: Icons.diamond_rounded,
@@ -51,23 +56,29 @@ class AboutScreen extends StatelessWidget {
   ];
 
   // Short "how it works" steps shown as a numbered flow, so new users
-  // understand the core loop (connect -> upload/schedule -> relax) at a glance.
+  // understand the core loop (connect -> select platforms -> relax) at a glance.
   static const _steps = [
     _Step(
       number: '1',
-      title: 'Connect Your Channel',
-      description: 'Sign in with Google and link your YouTube channel in a few taps.',
+      title: 'Connect Your Accounts',
+      description: 'Sign in with Google to link YouTube, and with Facebook to link Facebook Pages and Instagram Reels — all in a few taps.',
     ),
     _Step(
       number: '2',
-      title: 'Upload or Auto-Connect Drive',
-      description: 'Upload videos manually, in bulk, or connect Google Drive for fully automatic daily uploads.',
+      title: 'Upload & Choose Platforms',
+      description: 'Upload one video, pick which platforms to publish it to, and set titles, captions, and hashtags for each.',
     ),
     _Step(
       number: '3',
       title: 'Sit Back & Get Notified',
-      description: 'TubePilot handles the upload queue and pings you the moment each video goes live.',
+      description: 'Tube Pilot handles the publishing queue for every platform and pings you the moment each one goes live.',
     ),
+  ];
+
+  static const _platforms = [
+    _Platform(emoji: '📺', name: 'YouTube', description: 'Single, bulk, and Drive auto-uploads to your channel.'),
+    _Platform(emoji: '📸', name: 'Instagram', description: 'Publish Reels to your connected Instagram Business account.'),
+    _Platform(emoji: '📘', name: 'Facebook', description: 'Publish Reels to your connected Facebook Page.'),
   ];
 
   @override
@@ -89,34 +100,54 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 16),
           const Center(
             child: Text(
-              'TubePilot',
+              'Tube Pilot',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
             ),
           ),
           const SizedBox(height: 4),
           Center(
             child: Text(
-              'Schedule & Auto-Upload to YouTube',
+              'Schedule & Auto-Publish to YouTube, Instagram & Facebook',
+              textAlign: TextAlign.center,
               style: TextStyle(color: context.surfaces.textDim, fontSize: 13.5),
             ),
           ),
           const SizedBox(height: 24),
 
-          // ---------------- What is TubePilot ----------------
+          // ---------------- What is Tube Pilot ----------------
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: context.surfaces.card2, borderRadius: BorderRadius.circular(18)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('What is TubePilot?', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                const Text('What is Tube Pilot?', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
                 Text(
-                  'TubePilot is your personal YouTube upload assistant — built for creators who want their videos '
-                  'live without babysitting an upload progress bar. Upload directly, schedule for later, or hand it '
-                  'over to Drive auto-upload and let TubePilot take care of the rest.',
+                  'Tube Pilot is your personal multi-platform upload assistant — built for creators who want their '
+                  'videos live everywhere without babysitting an upload progress bar. Upload once, publish to '
+                  'YouTube, Instagram Reels, and Facebook Reels together or on independent schedules, and let '
+                  'Tube Pilot take care of the rest.',
                   style: TextStyle(color: context.surfaces.textDim, fontSize: 13.5, height: 1.5),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ---------------- Supported Platforms ----------------
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: context.surfaces.card2, borderRadius: BorderRadius.circular(18)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Supported Platforms', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 14),
+                for (int i = 0; i < _platforms.length; i++) ...[
+                  _PlatformRow(platform: _platforms[i]),
+                  if (i != _platforms.length - 1) const SizedBox(height: 14),
+                ],
               ],
             ),
           ),
@@ -171,18 +202,23 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // ---------------- Why TubePilot ----------------
+          // ---------------- Why Tube Pilot ----------------
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: context.surfaces.card2, borderRadius: BorderRadius.circular(18)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Why Creators Use TubePilot', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                const Text('Why Creators Use Tube Pilot', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),
                 _WhyRow(
                   icon: Icons.speed_rounded,
-                  text: 'Uploads that used to take a desktop and a browser tab now happen from your pocket.',
+                  text: 'Uploads that used to take a desktop and multiple browser tabs now happen from your pocket.',
+                ),
+                const SizedBox(height: 10),
+                _WhyRow(
+                  icon: Icons.hub_rounded,
+                  text: 'One video, three platforms — no more re-uploading the same clip to YouTube, Instagram, and Facebook separately.',
                 ),
                 const SizedBox(height: 10),
                 _WhyRow(
@@ -236,7 +272,6 @@ class AboutScreen extends StatelessWidget {
                   'Mr. Anik Kesharwani',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
-                // Signature enlarged: 40 -> 72
                 const SizedBox(height: 16),
                 Image.asset(
                   'assets/signature.png',
@@ -277,6 +312,13 @@ class _Step {
   final String title;
   final String description;
   const _Step({required this.number, required this.title, required this.description});
+}
+
+class _Platform {
+  final String emoji;
+  final String name;
+  final String description;
+  const _Platform({required this.emoji, required this.name, required this.description});
 }
 
 // ---------------- Helper widgets ----------------
@@ -355,6 +397,41 @@ class _StepRow extends StatelessWidget {
                 step.description,
                 style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5, height: 1.4),
               ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlatformRow extends StatelessWidget {
+  final _Platform platform;
+  const _PlatformRow({required this.platform});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.purple.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(platform.emoji, style: const TextStyle(fontSize: 16)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(platform.name, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 3),
+              Text(platform.description, style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5, height: 1.4)),
             ],
           ),
         ),

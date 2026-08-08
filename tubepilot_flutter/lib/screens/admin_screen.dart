@@ -764,9 +764,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
               _settingsField('UPI ID', _upiCtrl, 'tubepilot@upi', Icons.account_balance_wallet_outlined),
               const SizedBox(height: 16),
-              _settingsField('Account Name', _accNameCtrl, 'TubePilot', Icons.badge_outlined),
+              _settingsField('Account Name', _accNameCtrl, 'Tube Pilot', Icons.badge_outlined),
               const SizedBox(height: 16),
-              _settingsField('Merchant Name', _merchantCtrl, 'TubePilot', Icons.storefront_outlined),
+              _settingsField('Merchant Name', _merchantCtrl, 'Tube Pilot', Icons.storefront_outlined),
               const SizedBox(height: 24),
 
               GradientButton(label: 'Save Settings', loading: settingsSaving, onPressed: _saveSettings),

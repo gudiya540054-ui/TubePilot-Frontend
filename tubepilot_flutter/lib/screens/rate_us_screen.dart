@@ -61,6 +61,8 @@ class _RateUsBodyState extends State<RateUsBody> {
   late final TextEditingController _reviewCtrl;
   late final TextEditingController _emailCtrl;
 
+  static const _starLabels = {1: 'Poor', 2: 'Fair', 3: 'Good', 4: 'Great', 5: 'Excellent'};
+
   @override
   void initState() {
     super.initState();
@@ -121,7 +123,7 @@ class _RateUsBodyState extends State<RateUsBody> {
       );
       if (!mounted) return;
       setState(() => _savedRating = res['rating']);
-      showToast(context, 'Thanks for your feedback! ⭐', isSuccess: true);
+      showToast(context, 'Thanks for your feedback!', isSuccess: true);
       if (widget.isPopup) {
         await Future.delayed(const Duration(milliseconds: 900));
         if (mounted) Navigator.of(context).maybePop();
@@ -174,7 +176,7 @@ class _RateUsBodyState extends State<RateUsBody> {
             child: const Center(child: Icon(Icons.star_rounded, color: Colors.white, size: 30)),
           ),
           const SizedBox(height: 14),
-          const Text('Enjoying TubePilot?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text('Enjoying Tube Pilot?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           Text('Let us know how we\'re doing', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
           const SizedBox(height: 24),
@@ -197,6 +199,12 @@ class _RateUsBodyState extends State<RateUsBody> {
               );
             }),
           ),
+          // Shows what the selected star count means, so a plain number
+          // ("4 stars") reads as an actual sentiment ("Great").
+          if (_stars > 0) ...[
+            const SizedBox(height: 8),
+            Text(_starLabels[_stars] ?? '', style: const TextStyle(color: AppColors.diamond, fontSize: 13, fontWeight: FontWeight.w700)),
+          ],
           const SizedBox(height: 20),
 
           Row(children: [
@@ -212,17 +220,18 @@ class _RateUsBodyState extends State<RateUsBody> {
           TextField(
             controller: _reviewCtrl,
             maxLines: 4,
+            maxLength: 500,
             onChanged: (_) => _reviewManuallyEdited = true,
             decoration: const InputDecoration(hintText: 'Select a star rating to auto-fill, or write your own review...'),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 6),
 
           Text('Your Email', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
           const SizedBox(height: 6),
           TextField(
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(hintText: 'you@example.com'),
+            decoration: const InputDecoration(hintText: 'you@example.com', prefixIcon: Icon(Icons.email_outlined, size: 18)),
           ),
           const SizedBox(height: 24),
 

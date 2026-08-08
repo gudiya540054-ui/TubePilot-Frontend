@@ -24,8 +24,12 @@ class ReferEarnScreen extends StatelessWidget {
             decoration: BoxDecoration(gradient: AppColors.gradient, borderRadius: BorderRadius.circular(20)),
             child: Column(
               children: [
-                const Text('🎁', style: TextStyle(fontSize: 40)),
-                const SizedBox(height: 10),
+                Container(
+                  width: 60, height: 60,
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), shape: BoxShape.circle),
+                  child: const Icon(Icons.card_giftcard_rounded, color: Colors.white, size: 30),
+                ),
+                const SizedBox(height: 12),
                 const Text('Invite friends, earn diamonds', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
                 const SizedBox(height: 6),
                 const Text(
@@ -64,7 +68,7 @@ class ReferEarnScreen extends StatelessWidget {
             icon: Icons.share_outlined,
             onPressed: code.isEmpty ? null : () {
               SharePlus.instance.share(ShareParams(
-                text: 'Join me on TubePilot and schedule your YouTube uploads effortlessly! '
+                text: 'Join me on Tube Pilot and schedule your YouTube uploads effortlessly! '
                     'Use my referral code "$code" when you sign up to get bonus diamonds.',
               ));
             },
@@ -73,23 +77,23 @@ class ReferEarnScreen extends StatelessWidget {
 
           Text('How it works', style: TextStyle(color: context.surfaces.textDim, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
-          _step('1', 'Share your code with a friend'),
-          _step('2', 'They enter it during sign up'),
-          _step('3', 'You both get bonus diamonds instantly'),
+          _step(Icons.ios_share_rounded, 'Share your code with a friend'),
+          _step(Icons.person_add_alt_1_rounded, 'They enter it during sign up'),
+          _step(Icons.diamond_rounded, 'You both get bonus diamonds instantly'),
         ],
       ),
     );
   }
 
-  Widget _step(String number, String text) {
+  Widget _step(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
           Container(
-            width: 26, height: 26,
+            width: 30, height: 30,
             decoration: const BoxDecoration(gradient: AppColors.gradient, shape: BoxShape.circle),
-            child: Center(child: Text(number, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))),
+            child: Center(child: Icon(icon, color: Colors.white, size: 15)),
           ),
           const SizedBox(width: 12),
           Expanded(child: Text(text, style: const TextStyle(fontSize: 13.5))),

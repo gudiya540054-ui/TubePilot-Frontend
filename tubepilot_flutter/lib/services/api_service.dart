@@ -168,12 +168,48 @@ class ApiService {
   Future<Map<String, dynamic>> listDriveFolders({String? parentId}) =>
       _request('/drive/folders${parentId != null ? '?parentId=$parentId' : ''}');
 
-  // ---------------- Videos ----------------
+  // ---------------- Meta (Facebook) ----------------
+  Future<Map<String, dynamic>> getMetaOAuthUrl() => _request('/meta/oauth/url?platform=mobile');
+  Future<Map<String, dynamic>> getMetaStatus() => _request('/meta/status');
+  Future<Map<String, dynamic>> getMetaPendingPages() => _request('/meta/pages');
+  Future<Map<String, dynamic>> selectMetaPage(String pageId) =>
+      _request('/meta/select-page', method: 'PATCH', body: {'pageId': pageId});
+  Future<Map<String, dynamic>> disconnectFacebook() => _request('/meta/facebook/disconnect', method: 'DELETE');
+
+  // ---------------- Videos (multi-platform) ----------------
+  /// platforms: e.g. ['youtube', 'facebook']
+  /// youtube/facebook: platform-specific metadata maps, only the
+  /// ones present in [platforms] need to be non-null.
+  Future<Map<String, dynamic>> uploadVideo({
+    required String videoPath,
+    String? thumbnailPath,
+    required List<String> platforms,
+    Map<String, dynamic>? youtube,
+    Map<String, dynamic>? facebook,
+  }) async {
+    final videoMime = _lookupMimeOrDefault(videoPath, 'video/mp4');
+    final files = [
+      await http.MultipartFile.fromPath('video', videoPath, contentType: videoMime),
+    ];
+    if (thumbnailPath != null) {
+      final thumbMime = _lookupMimeOrDefault(thumbnailPath, 'image/jpeg');
+      files.add(await http.MultipartFile.fromPath('thumbnail', thumbnailPath, contentType: thumbMime));
+    }
+
+    final fields = <String, String>{
+      'platforms': jsonEncode(platforms),
+      if (youtube != null) 'youtube': jsonEncode(youtube),
+      if (facebook != null) 'facebook': jsonEncode(facebook),
+    };
+
+    return uploadMultipart('/videos/upload', fields: fields, files: files);
+  }
+
   Future<Map<String, dynamic>> listVideos({String? status}) =>
       _request('/videos${status != null ? '?status=$status' : ''}');
   Future<Map<String, dynamic>> getVideo(String id) => _request('/videos/$id');
-  Future<Map<String, dynamic>> scheduleVideo(String id, String scheduledAt) =>
-      _request('/videos/$id/schedule', method: 'PATCH', body: {'scheduledAt': scheduledAt});
+  Future<Map<String, dynamic>> scheduleVideoPlatform(String id, String platform, String scheduledAt) =>
+      _request('/videos/$id/schedule/$platform', method: 'PATCH', body: {'scheduledAt': scheduledAt});
   Future<Map<String, dynamic>> cancelVideo(String id) => _request('/videos/$id', method: 'DELETE');
 
   // ---------------- Diamonds ----------------
@@ -184,13 +220,16 @@ class ApiService {
   // ---------------- Wallet ----------------
   Future<Map<String, dynamic>> getWallet() => _request('/wallet');
 
-  // ---------------- AI ----------------
+  // ---------------- AI (platform-aware) ----------------
   Future<Map<String, dynamic>> aiTitle(String topic) => _request('/ai/title', method: 'POST', body: {'topic': topic});
   Future<Map<String, dynamic>> aiDescription(String topic) =>
       _request('/ai/description', method: 'POST', body: {'topic': topic});
   Future<Map<String, dynamic>> aiTags(String topic) => _request('/ai/tags', method: 'POST', body: {'topic': topic});
+  Future<Map<String, dynamic>> aiCaption(String topic, String platform) =>
+      _request('/ai/caption', method: 'POST', body: {'topic': topic, 'platform': platform});
+  Future<Map<String, dynamic>> aiHashtags(String topic, String platform) =>
+      _request('/ai/hashtags', method: 'POST', body: {'topic': topic, 'platform': platform});
 
-  // ---------------- Notifications ----------------
   // ---------------- Notifications ----------------
   Future<Map<String, dynamic>> getNotifications() => _request('/notifications');
   Future<Map<String, dynamic>> markNotificationRead(String id) =>
@@ -200,7 +239,7 @@ class ApiService {
       _request('/notifications/register-device', method: 'POST', body: {'fcmToken': fcmToken});
   Future<Map<String, dynamic>> registerOneSignalPlayerId(String playerId) =>
       _request('/notifications/register-onesignal-player', method: 'POST', body: {'playerId': playerId});
-      
+
   // ---------------- Analytics ----------------
   Future<Map<String, dynamic>> getAnalytics() => _request('/analytics');
 
@@ -221,21 +260,15 @@ class ApiService {
       _request('/admin/payments/$id/reject', method: 'PATCH', body: {'note': note});
   Future<Map<String, dynamic>> getAdminPaymentSettings() => _request('/admin/payment-settings');
 
-  /// Admin: list/search users
   Future<Map<String, dynamic>> adminUsers({String? search}) => _request(
       '/admin/users${search != null && search.trim().isNotEmpty ? '?search=${Uri.encodeQueryComponent(search.trim())}' : ''}');
 
-  /// Admin: force logout a user from all their devices
   Future<Map<String, dynamic>> forceLogoutUser(String id) =>
       _request('/admin/users/$id/force-logout', method: 'POST');
 
-  /// Admin: toggle a user's active/suspended status
   Future<Map<String, dynamic>> toggleUserActive(String id) =>
       _request('/admin/users/$id/toggle-active', method: 'PATCH');
 
-  /// Admin: update payment settings shown in the Diamond Store.
-  /// If [qrImagePath] is provided, uploads it as multipart along with the
-  /// other fields; otherwise sends a plain JSON PATCH request.
   Future<Map<String, dynamic>> updatePaymentSettings({
     required String upiId,
     required String accountName,
@@ -260,5 +293,18 @@ class ApiService {
       'accountName': accountName,
       'merchantName': merchantName,
     });
+  }
+
+  http.MediaType _lookupMimeOrDefault(String path, String fallback) {
+    // Minimal inline lookup so this file doesn't need an extra import beyond
+    // what's already used elsewhere (mime package is used in upload_screen.dart).
+    final ext = path.split('.').last.toLowerCase();
+    const map = {
+      'mp4': 'video/mp4', 'mov': 'video/quicktime', 'mkv': 'video/x-matroska',
+      'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+    };
+    final full = map[ext] ?? fallback;
+    final parts = full.split('/');
+    return http.MediaType(parts[0], parts[1]);
   }
 }

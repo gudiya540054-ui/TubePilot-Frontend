@@ -1,4 +1,4 @@
-# TubePilot — Flutter App (Android + iOS)
+# Tube Pilot — Flutter App (Android + iOS)
 
 Same backend as before (`tubepilot/backend` — nothing there changes except two small real fixes: mobile clients now get a `refreshToken` in the JSON response, and YouTube-connect can bounce back into the app via a deep link). This folder is only the **Flutter client**, replacing the HTML/JS frontend.
 
@@ -138,6 +138,6 @@ You still need your own MongoDB/Google/Cloudinary/Groq credentials in `backend/.
 
 ## 10. Building the release APK (when ready)
 ```bash
-lutter build apk --releasef
+lutter build apk --release
 ```
 Output: `build/app/outputs/flutter-apk/app-release.apk`. For the Play Store, build an app bundle instead: `flutter build appbundle --release`. Remember to point `apiBaseUrl` in `lib/config.dart` at your **deployed** backend before this build — not `10.0.2.2`.

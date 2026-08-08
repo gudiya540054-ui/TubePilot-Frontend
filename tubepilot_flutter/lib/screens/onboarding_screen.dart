@@ -18,7 +18,7 @@ class _OnboardingStep {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _steps = const [
-    _OnboardingStep('☁️⬆️', 'Schedule videos from anywhere.', 'Set a date and time, and TubePilot uploads it for you automatically.'),
+    _OnboardingStep('☁️⬆️', 'Schedule videos from anywhere.', 'Set a date and time, and Tube Pilot uploads it for you automatically.'),
     _OnboardingStep('📱☁️', 'Phone off? Video still uploads.', 'Our cloud storage system holds your video safely until upload time.'),
     _OnboardingStep('💎', 'Earn time, not stress.', 'AI titles, tags, and descriptions save hours of manual work.'),
   ];

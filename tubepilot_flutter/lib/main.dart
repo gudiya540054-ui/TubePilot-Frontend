@@ -10,25 +10,17 @@ import 'services/api_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/meta_page_picker_screen.dart';
 import 'widgets/common.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
 // ⚠️ TODO: replace with your real OneSignal App ID
-// (OneSignal dashboard -> Settings -> Keys & IDs -> "OneSignal App ID").
-// This is the PUBLIC app id, safe to ship in the app — NOT the REST API Key
-// (that one stays server-side only, in the backend's .env as
-// ONESIGNAL_API_KEY, used by utils/oneSignalPush.js).
 const String oneSignalAppId = '205c5c05-ad00-4e06-a8f4-d7ff9245ccfd';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase is only used for push notifications — it must NEVER be allowed
-  // to block or crash app startup. If it fails or hangs (e.g. mismatched
-  // google-services.json after a package rename, no network, etc.), we log
-  // it and continue straight to runApp() so the app is never stuck on the
-  // native splash screen forever.
   try {
     await Firebase.initializeApp().timeout(
       const Duration(seconds: 8),
@@ -38,11 +30,6 @@ void main() async {
     debugPrint('⚠️ Firebase init failed/skipped, continuing without push notifications: $e');
   }
 
-  // OneSignal is only used for the "your free uploads + diamonds are
-  // exhausted" alert (see backend utils/oneSignalPush.js). Just like
-  // Firebase above, it must never block or crash app startup — wrapped in
-  // its own try/catch so a OneSignal outage/misconfig never affects the rest
-  // of the app.
   try {
     OneSignal.initialize(oneSignalAppId);
     OneSignal.Notifications.requestPermission(true);
@@ -69,19 +56,12 @@ class _TubePilotAppState extends State<TubePilotApp> {
     _initOneSignalPlayerIdSync();
   }
 
-  // Sends the device's OneSignal player/subscription id to the backend
-  // (POST /api/notifications/register-onesignal-player) so
-  // utils/oneSignalPush.js can target this device later. Registers
-  // immediately if an id is already available (e.g. app relaunch), and also
-  // listens for future changes (e.g. right after the user grants
-  // notification permission for the first time).
   void _initOneSignalPlayerIdSync() {
     try {
       final existingId = OneSignal.User.pushSubscription.id;
       if (existingId != null) {
         ApiService.instance.registerOneSignalPlayerId(existingId).catchError((_) {});
       }
-
       OneSignal.User.pushSubscription.addObserver((state) {
         final playerId = OneSignal.User.pushSubscription.id;
         if (playerId != null) {
@@ -93,12 +73,10 @@ class _TubePilotAppState extends State<TubePilotApp> {
     }
   }
 
-  // Listens for the custom "tubepilot://oauth-success" deep link that the
-  // backend redirects to once EITHER a YouTube channel connect (see
-  // backend/routes/youtube.js -> platform=mobile) OR a Google Drive connect
-  // (see backend/routes/drive.js -> platform=mobile) finishes in the
-  // external browser. Query params tell us which one just happened:
-  // "youtube_connected" for YouTube, "drive_connected" for Drive.
+  // Listens for "tubepilot://oauth-success" from YouTube, Google Drive, AND
+  // now Meta (Facebook/Instagram) connect flows. Query params tell us which:
+  // "youtube_connected", "drive_connected", "meta_connected". For Meta, an
+  // extra "multiple_pages" param tells us whether to show the Page picker.
   Future<void> _initDeepLinks() async {
     try {
       final appLinks = AppLinks();
@@ -106,7 +84,11 @@ class _TubePilotAppState extends State<TubePilotApp> {
         if (uri.scheme == 'tubepilot' && uri.host == 'oauth-success') {
           final hasYoutubeParam = uri.queryParameters.containsKey('youtube_connected');
           final hasDriveParam = uri.queryParameters.containsKey('drive_connected');
+          final hasMetaParam = uri.queryParameters.containsKey('meta_connected');
           final ctx = navigatorKey.currentContext;
+
+          bool metaSuccess = false;
+          bool metaMultiplePages = false;
 
           if (hasYoutubeParam) {
             final connected = uri.queryParameters['youtube_connected'] == '1';
@@ -118,12 +100,24 @@ class _TubePilotAppState extends State<TubePilotApp> {
             if (ctx != null) {
               showToast(ctx, connected ? 'Google Drive connected!' : 'Failed to connect Google Drive', isSuccess: connected, isError: !connected);
             }
+          } else if (hasMetaParam) {
+            metaSuccess = uri.queryParameters['meta_connected'] == '1';
+            metaMultiplePages = uri.queryParameters['multiple_pages'] == '1';
+            if (ctx != null && !metaMultiplePages) {
+              showToast(ctx, metaSuccess ? 'Facebook / Instagram connected!' : 'Failed to connect Facebook / Instagram', isSuccess: metaSuccess, isError: !metaSuccess);
+            }
           }
 
           navigatorKey.currentState?.pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const DashboardScreen()),
             (route) => false,
           );
+
+          // If the user manages multiple Facebook Pages, send them straight
+          // to the picker so they can choose which one to connect.
+          if (hasMetaParam && metaSuccess && metaMultiplePages) {
+            navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const MetaPagePickerScreen()));
+          }
         }
       });
     } catch (e) {

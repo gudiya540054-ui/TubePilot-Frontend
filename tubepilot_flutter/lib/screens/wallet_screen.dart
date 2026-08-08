@@ -43,6 +43,14 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     }
   }
 
+  // Real transaction-type icons, replacing any emoji previously used —
+  // gives each row a proper Material icon matched to what happened.
+  (IconData, Color) _txnIcon(Map t, bool isSpend) {
+    if (t['type'] == 'diamond_purchase') return (Icons.diamond_rounded, AppColors.diamond);
+    if (isSpend) return (Icons.upload_rounded, AppColors.red);
+    return (Icons.replay_rounded, AppColors.green);
+  }
+
   @override
   Widget build(BuildContext context) {
     final all = (wallet?['transactions'] as List?) ?? [];
@@ -68,7 +76,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     child: Column(children: [
                       Text('Total Diamonds', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
                       const SizedBox(height: 6),
-                      Text('💎 ${wallet?['diamondBalance'] ?? 0}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+                      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const Icon(Icons.diamond_rounded, color: AppColors.diamond, size: 24),
+                        const SizedBox(width: 8),
+                        Text('${wallet?['diamondBalance'] ?? 0}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+                      ]),
                       const SizedBox(height: 6),
                       Text('${wallet?['freeUploadsRemaining'] ?? 0} free uploads remaining this month', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
                     ]),
@@ -99,13 +111,20 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
         final label = t['type'] == 'diamond_purchase' ? 'Diamond Pack (${t['diamondPackage']})' : (isSpend ? 'Video Scheduled' : 'Diamond Refund');
         final amount = t['type'] == 'diamond_purchase' ? '+${t['diamondPackage']}' : (isSpend ? '-${t['diamondsForSpend']}' : '+${t['diamondsForSpend']}');
         final (color, statusLabel) = _statusBadge(t['status'] ?? '');
+        final (icon, iconColor) = _txnIcon(t, isSpend);
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(14)),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Container(
+                width: 38, height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: iconColor.withOpacity(0.14), borderRadius: BorderRadius.circular(11)),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),

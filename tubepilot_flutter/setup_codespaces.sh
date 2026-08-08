@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# TubePilot - GitHub Codespaces Setup Script
+# Tube Pilot - GitHub Codespaces Setup Script
 # Installs Flutter + Android SDK, sets PATH, accepts licenses, checks Java,
 # and builds the debug APK. Safe to re-run if something fails partway.
 # ==============================================================================

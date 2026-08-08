@@ -5,6 +5,7 @@ import '../services/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/brand_icons.dart';
 import 'dashboard_screen.dart';
 
 class UsernameSetupScreen extends StatefulWidget {
@@ -124,7 +125,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Welcome to TubePilot! 🎉'),
+        title: Row(children: const [
+          Icon(Icons.celebration_rounded, color: AppColors.purple, size: 22),
+          SizedBox(width: 8),
+          Expanded(child: Text('Welcome to Tube Pilot!')),
+        ]),
         content: const Text("You've got 20 free video upload credits and 10 bonus diamonds to get started."),
         actions: [
           ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Let\'s go')),
@@ -141,8 +146,12 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Connect your YouTube channel'),
-        content: const Text('Connect now so TubePilot can upload and schedule videos straight to your channel.'),
+        title: Row(children: const [
+          YoutubeIcon(size: 22),
+          SizedBox(width: 10),
+          Expanded(child: Text('Connect your YouTube channel')),
+        ]),
+        content: const Text('Connect now so Tube Pilot can upload and schedule videos straight to your channel.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Later')),
           ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Connect Channel')),
@@ -184,7 +193,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   decoration: BoxDecoration(gradient: AppColors.gradient, shape: BoxShape.circle),
                   child: avatar != null && avatar.toString().isNotEmpty
                       ? ClipOval(child: Image.network(avatar, fit: BoxFit.cover))
-                      : const Center(child: Text('🙂', style: TextStyle(fontSize: 30))),
+                      : const Center(child: Icon(Icons.person_rounded, color: Colors.white, size: 36)),
                 ),
               ),
               const SizedBox(height: 24),
@@ -192,7 +201,10 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
               const SizedBox(height: 4),
               Text('We suggested one for you — feel free to change it', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
               const SizedBox(height: 6),
-              TextField(controller: _usernameCtrl, decoration: const InputDecoration(hintText: '@tech_creator')),
+              TextField(
+                controller: _usernameCtrl,
+                decoration: const InputDecoration(hintText: '@tech_creator', prefixIcon: Icon(Icons.alternate_email_rounded, size: 18)),
+              ),
               const SizedBox(height: 16),
               Text('Select Language', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
               const SizedBox(height: 6),
@@ -200,7 +212,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                 initialValue: _language,
                 items: _languages.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(),
                 onChanged: (v) => setState(() => _language = v ?? 'English'),
-                decoration: const InputDecoration(),
+                decoration: const InputDecoration(prefixIcon: Icon(Icons.language_rounded, size: 18)),
               ),
               const SizedBox(height: 30),
               GradientButton(label: 'Continue', loading: _loading, onPressed: _save),

@@ -44,7 +44,7 @@ block. Two things go inside THAT activity tag:
 
 --------------------------------------------------------------------------------
 
-NOTE: Location/GPS permission is NOT added here on purpose — nothing in TubePilot
+NOTE: Location/GPS permission is NOT added here on purpose — nothing in Tube Pilot
 uses the phone's location, so requesting it would only prompt users for access you
 don't need. If you did mean something specific by "GPS", tell me what feature needs
 it and I'll add the right permission for that instead.

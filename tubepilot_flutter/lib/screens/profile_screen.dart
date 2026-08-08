@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/brand_icons.dart';
 import 'wallet_screen.dart';
 import 'diamond_store_screen.dart';
 import 'notifications_screen.dart';
@@ -30,15 +31,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     'Payment / Diamonds Issue',
     'Video Upload Failed or Stuck',
     'YouTube Connection Issue',
+    'Facebook Connection Issue',
     'Account / Login Issue',
     'App Bug or Crash',
     'Other',
   ];
 
+  Map<String, dynamic>? _metaStatus; // { facebook: {...}|null }
+  bool _loadingMeta = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => context.read<AuthProvider>().refreshUser());
+    _loadMetaStatus();
+  }
+
+  Future<void> _loadMetaStatus() async {
+    try {
+      final res = await ApiService.instance.getMetaStatus();
+      setState(() => _metaStatus = res);
+    } catch (_) {
+      setState(() => _metaStatus = null);
+    } finally {
+      if (mounted) setState(() => _loadingMeta = false);
+    }
   }
 
   Future<void> _openSupport() async {
@@ -100,54 +117,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // Opens a Chrome Custom Tab / SFSafariViewController instead of a full
-  // external-app switch OR an isolated in-app WebView. This shares the
-  // device's existing Chrome/Google session (so Google shows the account
-  // picker immediately — no manual email typing) while staying visually
-  // "inside" the app (overlay tab, no full app switch, feels fast). The
-  // backend still redirects to the "tubepilot://oauth-success" deep link
-  // exactly as before, which main.dart already listens for.
+  Future<void> _launchOAuth(String url) async {
+    await custom_tabs.launchUrl(
+      Uri.parse(url),
+      customTabsOptions: custom_tabs.CustomTabsOptions(
+        shareState: custom_tabs.CustomTabsShareState.off,
+        urlBarHidingEnabled: true,
+        showTitle: true,
+      ),
+      safariVCOptions: const custom_tabs.SafariViewControllerOptions(
+        barCollapsingEnabled: true,
+        dismissButtonStyle: custom_tabs.SafariViewControllerDismissButtonStyle.close,
+      ),
+    );
+  }
+
   Future<void> _connectYoutube() async {
     try {
       final res = await ApiService.instance.getYoutubeOAuthUrl();
-      final url = res['url'];
-      if (url != null) {
-        await custom_tabs.launchUrl(
-          Uri.parse(url),
-          customTabsOptions: custom_tabs.CustomTabsOptions(
-            shareState: custom_tabs.CustomTabsShareState.off,
-            urlBarHidingEnabled: true,
-            showTitle: true,
-          ),
-          safariVCOptions: const custom_tabs.SafariViewControllerOptions(
-            barCollapsingEnabled: true,
-            dismissButtonStyle: custom_tabs.SafariViewControllerDismissButtonStyle.close,
-          ),
-        );
-      }
+      if (res['url'] != null) await _launchOAuth(res['url']);
     } catch (e) {
       if (mounted) showApiError(context, e);
     }
   }
 
-  // Mirrors _connectYoutube — same Custom Tabs approach for Google Drive.
   Future<void> _connectDrive() async {
     try {
       final res = await ApiService.instance.getDriveOAuthUrl();
-      final url = res['url'];
-      if (url != null) {
-        await custom_tabs.launchUrl(
-          Uri.parse(url),
-          customTabsOptions: custom_tabs.CustomTabsOptions(
-            shareState: custom_tabs.CustomTabsShareState.off,
-            urlBarHidingEnabled: true,
-            showTitle: true,
-          ),
-          safariVCOptions: const custom_tabs.SafariViewControllerOptions(
-            barCollapsingEnabled: true,
-            dismissButtonStyle: custom_tabs.SafariViewControllerDismissButtonStyle.close,
-          ),
-        );
+      if (res['url'] != null) await _launchOAuth(res['url']);
+    } catch (e) {
+      if (mounted) showApiError(context, e);
+    }
+  }
+
+  Future<void> _connectMeta() async {
+    try {
+      final res = await ApiService.instance.getMetaOAuthUrl();
+      if (res['url'] != null) await _launchOAuth(res['url']);
+    } catch (e) {
+      if (mounted) showApiError(context, e);
+    }
+  }
+
+  Future<void> _disconnectFacebook() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Disconnect Facebook?'),
+        content: const Text('You will need to reconnect to publish Facebook Reels again.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Disconnect', style: TextStyle(color: AppColors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await ApiService.instance.disconnectFacebook();
+      if (mounted) {
+        showToast(context, 'Facebook disconnected', isSuccess: true);
+        _loadMetaStatus();
       }
     } catch (e) {
       if (mounted) showApiError(context, e);
@@ -160,6 +189,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
   }
 
+  /// Compact side-by-side account tile — used for the 3-across YouTube /
+  /// Drive / Facebook row so Connected Accounts reads as one parallel group
+  /// instead of three stacked full-width rows.
+  Widget _connectTile({
+    required Widget icon,
+    required String label,
+    required String status,
+    required bool connected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+          decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: (connected ? AppColors.green : context.surfaces.textDim).withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: icon,
+              ),
+              const SizedBox(height: 8),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 3),
+              Text(status, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: connected ? AppColors.green : context.surfaces.textDim, fontSize: 10.5, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -168,6 +236,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final channel = user['youtubeChannel'];
     final drive = user['connectedDrive'];
     final avatar = user['avatar'];
+
+    final facebook = _metaStatus?['facebook'];
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile & Settings')),
@@ -181,7 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(gradient: AppColors.gradient, shape: BoxShape.circle),
                 child: avatar != null && avatar != ''
                     ? ClipOval(child: Image.network(avatar, fit: BoxFit.cover))
-                    : const Center(child: Text('🙂', style: TextStyle(fontSize: 28))),
+                    : const Center(child: Icon(Icons.person_rounded, color: Colors.white, size: 34)),
               ),
               const SizedBox(height: 10),
               Text('@${user['username'] ?? user['userId'] ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
@@ -190,65 +260,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 20),
 
-          GestureDetector(
-            onTap: channel == null ? _connectYoutube : null,
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Row(children: [
-                  channel != null && (channel['thumbnail'] ?? '').toString().isNotEmpty
+          Text('Connected Accounts', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+          const SizedBox(height: 8),
+
+          // ---------------- YouTube / Drive / Facebook side-by-side ----------------
+          if (_loadingMeta)
+            const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Center(child: CircularProgressIndicator(color: AppColors.purple)))
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _connectTile(
+                  icon: channel != null && (channel['thumbnail'] ?? '').toString().isNotEmpty
                       ? ClipOval(
                           child: Image.network(
                             channel['thumbnail'],
-                            width: 32, height: 32, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Text('📺', style: TextStyle(fontSize: 20)),
+                            width: 40, height: 40, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const YoutubeIcon(size: 20),
                           ),
                         )
-                      : const Text('📺', style: TextStyle(fontSize: 20)),
-                  const SizedBox(width: 10),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(channel?['channelTitle'] ?? 'Connect Channel', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                    if (channel != null) Text('${channel['subscriberCount'] ?? 0} Subscribers', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
-                  ]),
-                ]),
-                Text(channel == null ? 'Connect ›' : 'Connected', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
-              ]),
+                      : const YoutubeIcon(size: 20),
+                  label: channel?['channelTitle'] ?? 'YouTube',
+                  status: channel == null ? 'Connect' : 'Connected',
+                  connected: channel != null,
+                  onTap: channel == null ? _connectYoutube : () {},
+                ),
+                const SizedBox(width: 12),
+                _connectTile(
+                  icon: const DriveIcon(size: 20),
+                  label: drive == null ? 'Drive' : (drive['displayName'] ?? 'Drive'),
+                  status: drive == null ? 'Connect' : 'Manage',
+                  connected: drive != null,
+                  onTap: drive == null
+                      ? _connectDrive
+                      : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DriveSettingsScreen())),
+                ),
+                const SizedBox(width: 12),
+                _connectTile(
+                  icon: const FacebookIcon(size: 20),
+                  label: facebook?['pageName'] ?? 'Facebook',
+                  status: facebook == null ? 'Connect' : 'Connected',
+                  connected: facebook != null,
+                  onTap: facebook == null ? _connectMeta : _disconnectFacebook,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-
-          // Connect Drive card. Not connected -> starts OAuth. Connected ->
-          // opens the full Drive Settings screen (folder select/change,
-          // daily time, disconnect, connect another Drive).
-          GestureDetector(
-            onTap: drive == null
-                ? _connectDrive
-                : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DriveSettingsScreen())),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Row(children: [
-                  const Text('📁', style: TextStyle(fontSize: 20)),
-                  const SizedBox(width: 10),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(
-                      drive == null ? 'Connect Drive' : (drive['displayName'] ?? drive['email'] ?? 'Drive Connected'),
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                    ),
-                    if (drive != null)
-                      Text(
-                        drive['dailyUploadTime'] != null ? 'Daily upload at ${drive['dailyUploadTime']}' : 'Tap to manage',
-                        style: TextStyle(color: context.surfaces.textDim, fontSize: 12),
-                      ),
-                  ]),
-                ]),
-                Text(drive == null ? 'Connect ›' : 'Manage ›', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
-              ]),
-            ),
-          ),
-          const SizedBox(height: 12),
+          if (channel != null) ...[
+            const SizedBox(height: 8),
+            Text('${channel['subscriberCount'] ?? 0} Subscribers', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
+          ],
+          if (drive != null && drive['dailyUploadTime'] != null) ...[
+            const SizedBox(height: 4),
+            Text('Drive daily upload at ${drive['dailyUploadTime']}', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
+          ],
+          const SizedBox(height: 20),
 
           Container(
             decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),

@@ -1,4 +1,4 @@
-name: TubePilot
+name: tubepilot_flutter
 description: "TubePilot - YouTube Auto Uploader & Scheduler"
 publish_to: 'none'
 version: 1.0.0+1
@@ -16,6 +16,7 @@ dependencies:
 
   # Networking
   http: ^1.2.1
+  http_parser: ^4.0.2
 
   # Local persistence (theme preference, tokens)
   shared_preferences: ^2.2.3
@@ -25,10 +26,11 @@ dependencies:
   url_launcher: ^6.3.0
   app_links: ^6.3.2
 
-  # Chrome Custom Tabs / SFSafariViewController for OAuth flows (YouTube +
-  # Google Drive connect). Faster than a full external-app switch and shares
-  # the device's existing Chrome/Google login session, so the account picker
-  # shows immediately instead of asking for a manually typed email.
+  # Chrome Custom Tabs / SFSafariViewController for OAuth flows (YouTube,
+  # Google Drive, and Facebook/Instagram connect). Faster than a full
+  # external-app switch and shares the device's existing Chrome/Google login
+  # session, so the account picker shows immediately instead of asking for a
+  # manually typed email.
   flutter_custom_tabs: ^2.2.0
 
   # Push notifications (real phone notifications via Firebase Cloud Messaging)
