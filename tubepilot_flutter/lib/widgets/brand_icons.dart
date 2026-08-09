@@ -63,41 +63,36 @@ class _FacebookPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
+    final r = w / 2;
 
-    final circlePaint = Paint()..color = const Color(0xFF1877F2);
-    canvas.drawCircle(Offset(w / 2, h / 2), w / 2, circlePaint);
+    // Background circle — clipped so nothing (including the F) can ever
+    // paint outside it, which is what caused the previous version to look
+    // cut off / misaligned inside its container.
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromLTWH(0, 0, w, h)));
+    canvas.drawCircle(Offset(r, r), r, Paint()..color = const Color(0xFF1877F2));
 
-    final fPath = Path();
-    final barW = w * 0.16;
-    final centerX = w / 2;
+    // Simple, well-centered lowercase "f" — stem + one flag, sized as a
+    // fraction of the circle so it scales cleanly at any icon size.
+    final stemWidth = w * 0.16;
+    final stemLeft = w * 0.46;
+    final stemTop = h * 0.28;
+    final stemBottom = h * 0.82;
 
-    fPath.moveTo(centerX + barW / 2, h * 0.94);
-    fPath.lineTo(centerX - barW / 2, h * 0.94);
-    fPath.lineTo(centerX - barW / 2, h * 0.50);
-    fPath.lineTo(centerX - barW * 1.5, h * 0.50);
-    fPath.lineTo(centerX - barW * 1.5, h * 0.34);
-    fPath.lineTo(centerX - barW / 2, h * 0.34);
-    fPath.lineTo(centerX - barW / 2, h * 0.24);
-    fPath.cubicTo(
-      centerX - barW / 2, h * 0.12,
-      centerX - barW * 0.1, h * 0.06,
-      centerX + barW * 1.3, h * 0.06,
-    );
-    fPath.lineTo(centerX + barW * 1.3, h * 0.22);
-    fPath.lineTo(centerX + barW * 0.55, h * 0.22);
-    fPath.cubicTo(
-      centerX + barW * 0.2, h * 0.22,
-      centerX + barW / 2, h * 0.26,
-      centerX + barW / 2, h * 0.34,
-    );
-    fPath.lineTo(centerX + barW / 2, h * 0.34);
-    fPath.lineTo(centerX + barW * 1.25, h * 0.34);
-    fPath.lineTo(centerX + barW * 1.1, h * 0.50);
-    fPath.lineTo(centerX + barW / 2, h * 0.50);
-    fPath.lineTo(centerX + barW / 2, h * 0.94);
-    fPath.close();
+    final path = Path()
+      // Vertical stem.
+      ..addRect(Rect.fromLTRB(stemLeft, stemTop, stemLeft + stemWidth, stemBottom))
+      // Top hook curving right, like the top of an "f".
+      ..addRRect(RRect.fromRectAndCorners(
+        Rect.fromLTRB(stemLeft, h * 0.16, w * 0.68, stemTop + h * 0.02),
+        topLeft: const Radius.circular(3),
+        topRight: const Radius.circular(3),
+      ))
+      // Horizontal crossbar.
+      ..addRect(Rect.fromLTRB(w * 0.32, h * 0.46, w * 0.68, h * 0.46 + h * 0.12));
 
-    canvas.drawPath(fPath, Paint()..color = Colors.white);
+    canvas.drawPath(path, Paint()..color = Colors.white);
+    canvas.restore();
   }
 
   @override

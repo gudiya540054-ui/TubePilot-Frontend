@@ -141,6 +141,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // Shown when tapping an already-connected YouTube tile. A compact
+  // bottom-sheet (matches _openSupport's style) with the channel name and a
+  // single "Disconnect" action — kept small since YouTube has no other
+  // per-account settings to manage here (unlike Drive, which gets its own
+  // full screen for folder/time settings).
+  Future<void> _openYoutubeOptions(Map<String, dynamic> channel) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(color: context.surfaces.border, borderRadius: BorderRadius.circular(999)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(children: [
+                    channel['thumbnail'] != null && channel['thumbnail'].toString().isNotEmpty
+                        ? ClipOval(
+                            child: Image.network(
+                              channel['thumbnail'],
+                              width: 36, height: 36, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const YoutubeIcon(size: 20),
+                            ),
+                          )
+                        : const YoutubeIcon(size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(channel['channelTitle'] ?? 'YouTube', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text('${channel['subscriberCount'] ?? 0} Subscribers', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                Divider(color: context.surfaces.border, height: 1),
+                ListTile(
+                  leading: const Icon(Icons.link_off_rounded, color: AppColors.red),
+                  title: const Text('Disconnect', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w600)),
+                  onTap: () => Navigator.pop(sheetContext, 'disconnect'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (action == 'disconnect') await _disconnectYoutube();
+  }
+
+  Future<void> _disconnectYoutube() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Disconnect YouTube?'),
+        content: const Text('You will need to reconnect and grant permissions again to upload videos.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Disconnect', style: TextStyle(color: AppColors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await ApiService.instance.disconnectYoutube();
+      if (mounted) {
+        showToast(context, 'YouTube channel disconnected', isSuccess: true);
+        context.read<AuthProvider>().refreshUser();
+      }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
+    }
+  }
+
   Future<void> _connectDrive() async {
     try {
       final res = await ApiService.instance.getDriveOAuthUrl();
@@ -283,7 +373,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   label: channel?['channelTitle'] ?? 'YouTube',
                   status: channel == null ? 'Connect' : 'Connected',
                   connected: channel != null,
-                  onTap: channel == null ? _connectYoutube : () {},
+                  onTap: channel == null ? _connectYoutube : () => _openYoutubeOptions(channel),
                 ),
                 const SizedBox(width: 12),
                 _connectTile(
