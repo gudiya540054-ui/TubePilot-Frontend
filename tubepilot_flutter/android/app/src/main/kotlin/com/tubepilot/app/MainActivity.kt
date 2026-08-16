@@ -1,4 +1,4 @@
-package com.example.tubepilot_flutter
+package com.tubepilot.app
 
 import io.flutter.embedding.android.FlutterActivity
 

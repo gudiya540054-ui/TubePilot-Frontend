@@ -158,13 +158,15 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
   }
 
+  // Signs the user out on every device. Does NOT touch their data — account,
+  // diamonds, videos and connections stay exactly as they are.
   Future<void> _forceLogout(String id, String label) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text('Force logout?'),
-        content: Text('$label will be signed out on all their devices.'),
+        content: Text('$label will be signed out on all their devices. Their account and data are not affected.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Logout')),
@@ -184,6 +186,76 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     try {
       final res = await ApiService.instance.toggleUserActive(id);
       if (mounted) showToast(context, res['message'] ?? 'Updated', isSuccess: true);
+      _loadUsers(search: _searchCtrl.text.trim());
+    } catch (e) {
+      if (mounted) showApiError(context, e);
+    }
+  }
+
+  // PERMANENTLY deletes the account and all associated data (videos,
+  // transactions, notifications). Irreversible. If they sign up again, they
+  // get a completely fresh account — new userId, 0 diamonds, everything
+  // default, same as any brand new user.
+  //
+  // Two-step confirm: a warning dialog, then the admin must type the exact
+  // username/email to unlock the final Delete button. This is deliberately
+  // more friction than force-logout because this action cannot be undone.
+  Future<void> _deleteAccount(String id, String label) async {
+    final typedCtrl = TextEditingController();
+    bool matches = false;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Row(
+            children: [
+              const Icon(Icons.warning_rounded, color: AppColors.red, size: 22),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Delete account permanently?')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This will PERMANENTLY delete $label — their account, diamond balance, videos, and payment history. This cannot be undone.',
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'If they sign up again, they start over as a brand new user.',
+                style: TextStyle(color: Theme.of(dialogContext).hintColor, fontSize: 12.5),
+              ),
+              const SizedBox(height: 16),
+              Text('Type "$label" to confirm:', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: typedCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(hintText: 'Type exact username/email here'),
+                onChanged: (v) => setDialogState(() => matches = v.trim() == label),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.red, foregroundColor: Colors.white),
+              onPressed: matches ? () => Navigator.pop(dialogContext, true) : null,
+              child: const Text('Delete Permanently'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final res = await ApiService.instance.deleteUserAccount(id);
+      if (mounted) showToast(context, res['message'] ?? 'Account deleted', isSuccess: true);
       _loadUsers(search: _searchCtrl.text.trim());
     } catch (e) {
       if (mounted) showApiError(context, e);
@@ -588,6 +660,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                             final u = users[i];
                             final isActive = u['isActive'] ?? true;
                             final displayName = (u['username'] ?? u['email'] ?? 'U').toString();
+                            final deleteLabel = (u['username'] ?? u['email'] ?? 'User').toString();
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
                               padding: const EdgeInsets.all(14),
@@ -676,6 +749,21 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                                       ),
                                     ),
                                   ]),
+                                  const SizedBox(height: 8),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _deleteAccount(u['_id'], deleteLabel),
+                                      icon: const Icon(Icons.delete_forever, size: 14),
+                                      label: const Text('Delete Account', style: TextStyle(fontSize: 12)),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.red,
+                                        side: const BorderSide(color: AppColors.red),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             );

@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_custom_tabs/flutter_custom_tabs.dart' as custom_tabs;
 import '../services/auth_provider.dart';
 import '../services/api_service.dart';
-import '../providers/theme_provider.dart';
+import '../providers/language_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../widgets/brand_icons.dart';
@@ -12,12 +12,12 @@ import 'wallet_screen.dart';
 import 'diamond_store_screen.dart';
 import 'notifications_screen.dart';
 import 'admin_screen.dart';
-import 'login_screen.dart';
 import 'refer_earn_screen.dart';
 import 'about_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'rate_us_screen.dart';
 import 'drive_settings_screen.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool embedded;
@@ -40,10 +40,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _metaStatus; // { facebook: {...}|null }
   bool _loadingMeta = true;
 
+  // Live YouTube channel info (subscriber count etc.) — fetched separately
+  // from AuthProvider's cached user object, because GET /youtube/channel
+  // now refreshes the subscriber count live from the YouTube API on every
+  // call (see routes/youtube.js) instead of returning a value that was only
+  // ever set once at OAuth-connect time. AuthProvider's user['youtubeChannel']
+  // is still used as the "is a channel connected at all" source of truth and
+  // as an instant-paint fallback while this live fetch is in flight.
+  Map<String, dynamic>? _liveChannel;
+  bool _loadingChannel = false;
+
+  // DIAGNOSTIC: if the live fetch silently fails (network error, expired
+  // token that also fails to refresh, backend error, etc.) the UI used to
+  // just fall back to the stale cached count with zero visibility into why.
+  // This flag surfaces that failure state so the subscriber card can show
+  // a small "tap to retry" hint instead of quietly showing a wrong number.
+  bool _liveChannelFetchFailed = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<AuthProvider>().refreshUser());
+    // IMPORTANT: refreshUser() and _loadLiveChannel() both read
+    // AuthProvider's cached user. Previously refreshUser() was fired via
+    // addPostFrameCallback (fire-and-forget) while _loadLiveChannel() ran
+    // immediately after on the OLD cached user — meaning if the cached
+    // 'youtubeChannel' was stale/null at that exact moment, the live fetch
+    // could silently no-op. Now we await refreshUser() first, THEN run
+    // _loadLiveChannel(), so it always reads the freshest possible cached
+    // user before deciding whether a channel is connected.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<AuthProvider>().refreshUser();
+      if (mounted) _loadLiveChannel();
+    });
     _loadMetaStatus();
   }
 
@@ -55,6 +83,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _metaStatus = null);
     } finally {
       if (mounted) setState(() => _loadingMeta = false);
+    }
+  }
+
+  Future<void> _loadLiveChannel() async {
+    final user = context.read<AuthProvider>().user ?? {};
+    if (user['youtubeChannel'] == null) return; // nothing connected, skip the call
+    setState(() {
+      _loadingChannel = true;
+      _liveChannelFetchFailed = false;
+    });
+    try {
+      final res = await ApiService.instance.getYoutubeChannel();
+      if (mounted) {
+        setState(() {
+          _liveChannel = res['channel'];
+          _liveChannelFetchFailed = false;
+        });
+      }
+      // DIAGNOSTIC: log so you can confirm in `flutter run` / adb logcat
+      // output whether the live fetch actually returned fresh data, and
+      // what subscriberCount it came back with.
+      debugPrint('✅ [Profile] Live YouTube channel fetched: subscriberCount=${res['channel']?['subscriberCount']}, stale=${res['stale']}');
+    } catch (e) {
+      // Previously this failed completely silently — you'd just see the
+      // stale cached count with no indication anything went wrong. Now it
+      // logs the real error and flags the UI so you can tell "0 subscribers"
+      // apart from "fetch is failing".
+      debugPrint('❌ [Profile] Live YouTube channel fetch FAILED: $e');
+      if (mounted) setState(() => _liveChannelFetchFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingChannel = false);
     }
   }
 
@@ -141,11 +200,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // Shown when tapping an already-connected YouTube tile. A compact
-  // bottom-sheet (matches _openSupport's style) with the channel name and a
-  // single "Disconnect" action — kept small since YouTube has no other
-  // per-account settings to manage here (unlike Drive, which gets its own
-  // full screen for folder/time settings).
   Future<void> _openYoutubeOptions(Map<String, dynamic> channel) async {
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -224,6 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await ApiService.instance.disconnectYoutube();
       if (mounted) {
         showToast(context, 'YouTube channel disconnected', isSuccess: true);
+        setState(() => _liveChannel = null);
         context.read<AuthProvider>().refreshUser();
       }
     } catch (e) {
@@ -273,15 +328,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    await context.read<AuthProvider>().logout();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
-  }
-
-  /// Compact side-by-side account tile — used for the 3-across YouTube /
-  /// Drive / Facebook row so Connected Accounts reads as one parallel group
-  /// instead of three stacked full-width rows.
   Widget _connectTile({
     required Widget icon,
     required String label,
@@ -318,10 +364,135 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _youtubeSubscriberCard(Map<String, dynamic>? cachedChannel) {
+    final channel = _liveChannel ?? cachedChannel;
+
+    if (channel == null) {
+      return GestureDetector(
+        onTap: _connectYoutube,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(color: context.surfaces.border),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48, height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: context.surfaces.textDim.withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
+                child: const YoutubeIcon(size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Connect YouTube', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text('See your subscriber count here', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: context.surfaces.textDim),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final subs = channel['subscriberCount']?.toString() ?? '0';
+    final title = channel['channelTitle'] ?? 'YouTube';
+    final thumbnail = (channel['thumbnail'] ?? '').toString();
+
+    return GestureDetector(
+      onTap: () => _openYoutubeOptions(channel),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [AppColors.red.withOpacity(0.10), AppColors.red.withOpacity(0.02)]),
+          border: Border.all(color: context.surfaces.border),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            thumbnail.isNotEmpty
+                ? ClipOval(
+                    child: Image.network(
+                      thumbnail,
+                      width: 48, height: 48, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 48, height: 48,
+                        decoration: BoxDecoration(color: AppColors.red.withOpacity(0.14), shape: BoxShape.circle),
+                        child: const YoutubeIcon(size: 24),
+                      ),
+                    ),
+                  )
+                : Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(color: AppColors.red.withOpacity(0.14), shape: BoxShape.circle),
+                    child: const YoutubeIcon(size: 24),
+                  ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        _formatSubscriberCount(subs),
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.red),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('Subscribers', style: TextStyle(color: context.surfaces.textDim, fontSize: 12, fontWeight: FontWeight.w600)),
+                      if (_loadingChannel) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(width: 11, height: 11, child: CircularProgressIndicator(strokeWidth: 1.6, color: context.surfaces.textDim)),
+                      ],
+                      // DIAGNOSTIC: small tap-to-retry hint if the live fetch
+                      // failed, so a stale/wrong count is never shown without
+                      // any indication that something's off.
+                      if (_liveChannelFetchFailed && !_loadingChannel) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: _loadLiveChannel,
+                          child: Icon(Icons.refresh_rounded, size: 14, color: context.surfaces.textDim),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.more_horiz_rounded, color: context.surfaces.textDim),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatSubscriberCount(String raw) {
+    final n = int.tryParse(raw);
+    if (n == null) return raw;
+    if (n >= 10000000) return '${(n / 10000000).toStringAsFixed(1)}Cr';
+    if (n >= 100000) return '${(n / 100000).toStringAsFixed(1)}L';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+    return '$n';
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Watching LanguageProvider here (even though this screen doesn't call
+    // context.tr() everywhere yet) makes the whole ProfileScreen rebuild
+    // when the language changes, so the menu labels below — which DO use
+    // context.tr() — actually update live instead of needing a re-navigate.
+    context.watch<LanguageProvider>();
+
     final auth = context.watch<AuthProvider>();
-    final themeProvider = context.watch<ThemeProvider>();
     final user = auth.user ?? {};
     final channel = user['youtubeChannel'];
     final drive = user['connectedDrive'];
@@ -330,7 +501,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final facebook = _metaStatus?['facebook'];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile & Settings')),
+      appBar: AppBar(title: Text(context.tr('profile_settings_title'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
         children: [
@@ -350,32 +521,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 20),
 
-          Text('Connected Accounts', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+          _youtubeSubscriberCard(channel),
+          const SizedBox(height: 16),
+
+          Text(context.tr('connected_accounts'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
           const SizedBox(height: 8),
 
-          // ---------------- YouTube / Drive / Facebook side-by-side ----------------
           if (_loadingMeta)
             const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Center(child: CircularProgressIndicator(color: AppColors.purple)))
           else
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _connectTile(
-                  icon: channel != null && (channel['thumbnail'] ?? '').toString().isNotEmpty
-                      ? ClipOval(
-                          child: Image.network(
-                            channel['thumbnail'],
-                            width: 40, height: 40, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const YoutubeIcon(size: 20),
-                          ),
-                        )
-                      : const YoutubeIcon(size: 20),
-                  label: channel?['channelTitle'] ?? 'YouTube',
-                  status: channel == null ? 'Connect' : 'Connected',
-                  connected: channel != null,
-                  onTap: channel == null ? _connectYoutube : () => _openYoutubeOptions(channel),
-                ),
-                const SizedBox(width: 12),
                 _connectTile(
                   icon: const DriveIcon(size: 20),
                   label: drive == null ? 'Drive' : (drive['displayName'] ?? 'Drive'),
@@ -395,12 +552,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
-          if (channel != null) ...[
-            const SizedBox(height: 8),
-            Text('${channel['subscriberCount'] ?? 0} Subscribers', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
-          ],
           if (drive != null && drive['dailyUploadTime'] != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text('Drive daily upload at ${drive['dailyUploadTime']}', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
           ],
           const SizedBox(height: 20),
@@ -408,67 +561,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Container(
             decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
             child: Column(children: [
-              _menuRow(Icons.shopping_bag_rounded, 'Buy Diamonds', AppColors.diamond,
+              _menuRow(Icons.shopping_bag_rounded, context.tr('buy_diamonds'), AppColors.diamond,
                   () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiamondStoreScreen()))),
               _divider(),
-              _menuRow(Icons.diamond_rounded, 'Subscription & Wallet', AppColors.purple,
+              _menuRow(Icons.diamond_rounded, context.tr('subscription_wallet'), AppColors.purple,
                   () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletScreen()))),
               _divider(),
-              _menuRow(Icons.card_giftcard_rounded, 'Refer & Earn', AppColors.green,
+              _menuRow(Icons.card_giftcard_rounded, context.tr('refer_earn'), AppColors.green,
                   () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ReferEarnScreen()))),
               _divider(),
-              _menuRow(Icons.notifications_rounded, 'Notifications', AppColors.purpleLight,
+              _menuRow(Icons.notifications_rounded, context.tr('notifications'), AppColors.purpleLight,
                   () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
               _divider(),
-              _menuRow(Icons.help_rounded, 'Help & Support', AppColors.purple, _openSupport),
+              _menuRow(Icons.help_rounded, context.tr('help_support'), AppColors.purple, _openSupport),
               if (auth.isAdmin) ...[
                 _divider(),
-                _menuRow(Icons.admin_panel_settings_rounded, 'Admin Panel', AppColors.red,
+                _menuRow(Icons.admin_panel_settings_rounded, context.tr('admin_panel'), AppColors.red,
                     () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminScreen()))),
               ],
             ]),
           ),
           const SizedBox(height: 12),
 
+          // "Settings" stays last in this group, after "Rate Us".
           Container(
             decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
             child: Column(children: [
-              _menuRow(Icons.info_rounded, 'About', AppColors.purpleLight,
+              _menuRow(Icons.info_rounded, context.tr('about'), AppColors.purpleLight,
                   () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AboutScreen()))),
               _divider(),
-              _menuRow(Icons.privacy_tip_rounded, 'Privacy Policy', AppColors.purple,
+              _menuRow(Icons.privacy_tip_rounded, context.tr('privacy_policy'), AppColors.purple,
                   () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()))),
               _divider(),
-              _menuRow(Icons.star_rounded, 'Rate Us', AppColors.diamond,
+              _menuRow(Icons.star_rounded, context.tr('rate_us'), AppColors.diamond,
                   () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RateUsScreen()))),
+              _divider(),
+              _menuRow(Icons.settings_rounded, context.tr('settings_menu'), AppColors.purple,
+                  () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
             ]),
           ),
-          const SizedBox(height: 12),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
-            child: SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Dark Mode', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: Text('Default is Light', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
-              value: themeProvider.isDark,
-              activeColor: AppColors.purple,
-              onChanged: (v) => themeProvider.setDark(v),
-            ),
-          ),
           const SizedBox(height: 20),
 
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _logout,
-              icon: const Icon(Icons.logout, color: AppColors.red, size: 18),
-              label: const Text('Logout', style: TextStyle(color: AppColors.red)),
-              style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.red)),
-            ),
-          ),
-          const SizedBox(height: 20),
+          // Logout and Delete Account live in SettingsScreen now — see
+          // lib/screens/settings_screen.dart, under the "Account" section.
         ],
       ),
     );

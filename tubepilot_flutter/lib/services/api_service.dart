@@ -147,6 +147,13 @@ class ApiService {
   Future<Map<String, dynamic>> applyReferralCode(String referralCode) =>
       _request('/auth/apply-referral', method: 'POST', body: {'referralCode': referralCode});
 
+  /// Self-service account deletion (Google Play account-deletion compliance).
+  /// Permanently deletes the CALLER's own account — backend route is
+  /// DELETE /api/auth/delete-account, which runs the same cascade delete
+  /// (Cloudinary files, Drive disconnect, Video/Transaction/Notification
+  /// docs, User doc) as the admin delete flow. Irreversible.
+  Future<Map<String, dynamic>> deleteMyAccount() => _request('/auth/delete-account', method: 'DELETE');
+
   // ---------------- Dashboard ----------------
   Future<Map<String, dynamic>> dashboard() => _request('/dashboard');
 
@@ -268,6 +275,12 @@ class ApiService {
 
   Future<Map<String, dynamic>> toggleUserActive(String id) =>
       _request('/admin/users/$id/toggle-active', method: 'PATCH');
+
+  /// Admin permanently deleting a DIFFERENT user's account. Backend route
+  /// is DELETE /api/admin/users/:id (adminOnly). For a user deleting their
+  /// OWN account, use deleteMyAccount() above instead — different route,
+  /// different auth requirement.
+  Future<Map<String, dynamic>> deleteUserAccount(String id) => _request('/admin/users/$id', method: 'DELETE');
 
   Future<Map<String, dynamic>> updatePaymentSettings({
     required String upiId,

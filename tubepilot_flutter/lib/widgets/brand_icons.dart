@@ -58,41 +58,60 @@ class FacebookIcon extends StatelessWidget {
   }
 }
 
+// Rewritten: the previous version tried to compose the "f" from 3 separate
+// RRects (hook + stem + crossbar) with hand-tuned overlapping coordinates,
+// which produced a broken/misaligned glyph at render time. This version
+// draws the Facebook "f" as a SINGLE continuous vector path (matching the
+// real logomark's proportions), which renders correctly and consistently
+// at any icon size.
 class _FacebookPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final r = w / 2;
+    final center = Offset(w / 2, h / 2);
+    final radius = w / 2;
 
-    // Background circle — clipped so nothing (including the F) can ever
-    // paint outside it, which is what caused the previous version to look
-    // cut off / misaligned inside its container.
-    canvas.save();
-    canvas.clipPath(Path()..addOval(Rect.fromLTWH(0, 0, w, h)));
-    canvas.drawCircle(Offset(r, r), r, Paint()..color = const Color(0xFF1877F2));
+    // Circle background
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF1877F2));
 
-    // Simple, well-centered lowercase "f" — stem + one flag, sized as a
-    // fraction of the circle so it scales cleanly at any icon size.
-    final stemWidth = w * 0.16;
-    final stemLeft = w * 0.46;
-    final stemTop = h * 0.28;
+    // Single continuous "f" path, proportional to icon size.
+    final stemW = w * 0.16;
+    final stemLeft = w * 0.50;
+    final stemRight = stemLeft + stemW;
+    final crossbarY = h * 0.46;
+    final crossbarH = h * 0.13;
     final stemBottom = h * 0.82;
+    final hookTopY = h * 0.22;
 
     final path = Path()
-      // Vertical stem.
-      ..addRect(Rect.fromLTRB(stemLeft, stemTop, stemLeft + stemWidth, stemBottom))
-      // Top hook curving right, like the top of an "f".
-      ..addRRect(RRect.fromRectAndCorners(
-        Rect.fromLTRB(stemLeft, h * 0.16, w * 0.68, stemTop + h * 0.02),
-        topLeft: const Radius.circular(3),
-        topRight: const Radius.circular(3),
-      ))
-      // Horizontal crossbar.
-      ..addRect(Rect.fromLTRB(w * 0.32, h * 0.46, w * 0.68, h * 0.46 + h * 0.12));
+      // Start at bottom-left of stem
+      ..moveTo(stemLeft, stemBottom)
+      // Up the left side of the stem to where the crossbar notch begins
+      ..lineTo(stemLeft, crossbarY + crossbarH)
+      // Left into the crossbar notch
+      ..lineTo(w * 0.36, crossbarY + crossbarH)
+      ..lineTo(w * 0.36, crossbarY)
+      ..lineTo(stemLeft, crossbarY)
+      // Up to where the rounded hook begins
+      ..lineTo(stemLeft, hookTopY + stemW * 0.5)
+      // Rounded hook at the top (curves up and over to the right)
+      ..quadraticBezierTo(stemLeft, hookTopY, stemLeft + stemW * 0.5, hookTopY)
+      ..lineTo(w * 0.66, hookTopY)
+      ..lineTo(w * 0.66, hookTopY + stemW * 0.9)
+      ..lineTo(stemRight, hookTopY + stemW * 0.9)
+      // Down the right side of the stem to the crossbar
+      ..lineTo(stemRight, crossbarY)
+      // Right edge of crossbar
+      ..lineTo(stemRight, crossbarY + crossbarH)
+      // Down the right side of the stem to the bottom
+      ..lineTo(stemRight, stemBottom)
+      // Rounded bottom edge back to start
+      ..quadraticBezierTo(stemRight, stemBottom + stemW * 0.3, stemLeft + stemW * 0.5, stemBottom + stemW * 0.3)
+      ..quadraticBezierTo(stemLeft, stemBottom + stemW * 0.3, stemLeft, stemBottom)
+      ..close();
 
-    canvas.drawPath(path, Paint()..color = Colors.white);
-    canvas.restore();
+    canvas.drawPath(path, Paint()..color = Colors.white..style = PaintingStyle.fill);
   }
 
   @override

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config.dart';
 import '../services/api_service.dart';
@@ -7,10 +6,12 @@ import '../services/storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final ApiService _api = ApiService.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email', 'profile'],
-    serverClientId: AppConfig.googleServerClientId,
-  );
+
+  // google_sign_in v7 is a singleton — no more `GoogleSignIn(...)` constructor.
+  // It also requires an explicit, one-time async initialize() call before any
+  // other method (signIn/authenticate/signOut) can be used.
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  bool _googleSignInInitialized = false;
 
   Map<String, dynamic>? _user;
   bool _loading = true;
@@ -19,6 +20,12 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoggedIn => _user != null;
   bool get isLoading => _loading;
   bool get isAdmin => _user?['role'] == 'admin';
+
+  Future<void> _ensureGoogleSignInInitialized() async {
+    if (_googleSignInInitialized) return;
+    await _googleSignIn.initialize(serverClientId: AppConfig.googleServerClientId);
+    _googleSignInInitialized = true;
+  }
 
   Future<void> loadSession() async {
     _loading = true;
@@ -59,15 +66,26 @@ class AuthProvider extends ChangeNotifier {
     await _saveSessionFromAuthResponse(res);
   }
 
-  /// Real Google Sign-In flow using the google_sign_in plugin, verified
-  /// server-side by POST /api/auth/google (same backend endpoint the web app uses).
+  /// Real Google Sign-In flow using the google_sign_in plugin (v7 API),
+  /// verified server-side by POST /api/auth/google (same backend endpoint
+  /// the web app uses).
   Future<void> googleLogin() async {
     try {
-      await _googleSignIn.signOut(); // clear any cached account so account picker always shows
-      final account = await _googleSignIn.signIn();
-      if (account == null) throw Exception('Google sign-in cancelled');
+      await _ensureGoogleSignInInitialized();
 
-      final auth = await account.authentication;
+      // Clear any cached account so the account picker always shows.
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {
+        // signOut can throw if no session exists yet — safe to ignore.
+      }
+
+      // v7: signIn() -> authenticate(). It throws GoogleSignInException
+      // (e.g. code .canceled) instead of returning null when the user backs out.
+      final account = await _googleSignIn.authenticate();
+
+      // v7: `authentication` is now a synchronous getter, not a Future.
+      final auth = account.authentication;
       final idToken = auth.idToken;
       if (idToken == null) {
         throw Exception('Could not get Google ID token. Check googleServerClientId in config.dart');
@@ -75,10 +93,14 @@ class AuthProvider extends ChangeNotifier {
 
       final res = await _api.googleLogin(idToken);
       await _saveSessionFromAuthResponse(res);
-    } on PlatformException catch (e) {
-      if (e.code == 'sign_in_failed' && (e.message?.contains('10') ?? false)) {
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        throw Exception('Google sign-in cancelled');
+      }
+      if (e.code == GoogleSignInExceptionCode.clientConfigurationError ||
+          e.code == GoogleSignInExceptionCode.providerConfigurationError) {
         throw Exception(
-            'Google Sign-In setup issue (ApiException 10): the SHA-1 fingerprint or package name registered '
+            'Google Sign-In setup issue: the SHA-1 fingerprint or package name registered '
             'in Firebase/Google Cloud doesn\'t match this build. Re-check android/app/build.gradle applicationId, '
             'the SHA-1 in Firebase, and that google-services.json was re-downloaded after adding it.');
       }
