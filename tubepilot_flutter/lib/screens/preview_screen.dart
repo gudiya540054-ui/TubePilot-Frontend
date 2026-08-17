@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../theme/app_theme.dart';
+import '../providers/language_provider.dart';
 
 class PreviewScreen extends StatefulWidget {
   final String title;
@@ -14,7 +15,7 @@ class PreviewScreen extends StatefulWidget {
 class _PreviewScreenState extends State<PreviewScreen> {
   VideoPlayerController? _controller;
   bool _initialized = false;
-  String? _error;
+  String? _errorKey;
 
   @override
   void initState() {
@@ -24,7 +25,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   Future<void> _init() async {
     if (widget.videoUrl.isEmpty) {
-      setState(() => _error = 'Video preview is not available yet.');
+      setState(() => _errorKey = 'video_preview_not_available');
       return;
     }
     try {
@@ -40,7 +41,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
       });
       controller.play();
     } catch (e) {
-      if (mounted) setState(() => _error = 'Could not load video preview');
+      if (mounted) setState(() => _errorKey = 'could_not_load_preview');
     }
   }
 
@@ -68,10 +69,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
         title: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: Center(
-        child: _error != null
+        child: _errorKey != null
             ? Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(_error!, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+                child: Text(context.tr(_errorKey!), style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
               )
             : _initialized && _controller != null
                 ? GestureDetector(

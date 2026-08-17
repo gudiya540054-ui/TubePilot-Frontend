@@ -4,26 +4,12 @@ import '../services/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../providers/language_provider.dart';
 import 'login_screen.dart';
 
 /// Self-service account deletion — required by Google Play's Account
 /// Deletion policy (any app that lets users create an account must offer an
 /// in-app way to delete it, not just a "contact support" email link).
-///
-/// This is the USER-initiated version of what the admin panel already does
-/// for admins deleting a user. Same consequences, different trigger:
-///   - Deletes the user's Video, Transaction, and Notification docs
-///   - Deletes their uploaded files from Cloudinary
-///   - Disconnects (not deletes) their Google Drive — we only ever had
-///     drive.readonly access, so we can't touch their Drive files anyway
-///   - Deletes the User document itself
-/// If they sign up again later, it's a completely fresh account.
-///
-/// Backend: expects DELETE /api/auth/delete-account (or wherever
-/// ApiService.instance.deleteMyAccount() is wired up) to run that same
-/// cascade against req.user — NOT the admin route, which requires
-/// adminOnly and takes a target id. This screen deletes the CALLER's own
-/// account only.
 class DeleteAccountScreen extends StatefulWidget {
   const DeleteAccountScreen({super.key});
   @override
@@ -35,12 +21,14 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
   bool _deleting = false;
   bool _understood = false;
 
-  static const _consequences = [
-    'Your profile, username, and diamond balance',
-    'All videos you\'ve uploaded or converted',
-    'Your payment and transaction history',
-    'Your YouTube, Google Drive, and Facebook connections',
-    'Your referral code and referral history',
+  // Translation keys for each consequence line — resolved via context.tr()
+  // in build() so this list follows the selected language.
+  static const _consequenceKeys = [
+    'delete_consequence_profile',
+    'delete_consequence_videos',
+    'delete_consequence_payment',
+    'delete_consequence_connections',
+    'delete_consequence_referral',
   ];
 
   @override
@@ -56,7 +44,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
   Future<void> _submitDelete(Map<String, dynamic> user) async {
     final expected = _expectedConfirmText(user);
     if (_confirmCtrl.text.trim() != expected) {
-      showToast(context, 'Text doesn\'t match. Please type it exactly.', isError: true);
+      showToast(context, context.tr('text_doesnt_match'), isError: true);
       return;
     }
 
@@ -64,12 +52,9 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     try {
       await ApiService.instance.deleteMyAccount();
       if (!mounted) return;
-      // Account is gone server-side — clear local session and drop them at
-      // login. Don't call the normal logout()/refreshUser() flow since
-      // there's no account left to refresh.
       await context.read<AuthProvider>().logout();
       if (!mounted) return;
-      showToast(context, 'Your account has been permanently deleted', isSuccess: true);
+      showToast(context, context.tr('account_permanently_deleted'), isSuccess: true);
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
@@ -89,7 +74,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     final canDelete = _understood && _confirmCtrl.text.trim() == expected && !_deleting;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Delete Account')),
+      appBar: AppBar(title: Text(context.tr('delete_account_title'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
         children: [
@@ -107,8 +92,8 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'This permanently deletes your account. This action cannot be undone.',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.red),
+                    context.tr('delete_permanent_warning'),
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: AppColors.red),
                   ),
                 ),
               ],
@@ -116,7 +101,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
           ),
           const SizedBox(height: 20),
 
-          const Text('What gets deleted', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          Text(context.tr('what_gets_deleted'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
           const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
@@ -126,15 +111,15 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Column(
-              children: _consequences.map((c) {
+              children: _consequenceKeys.map((k) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.close_rounded, size: 16, color: AppColors.red),
+                      const Icon(Icons.close_rounded, size: 16, color: AppColors.red),
                       const SizedBox(width: 10),
-                      Expanded(child: Text(c, style: const TextStyle(fontSize: 13.5))),
+                      Expanded(child: Text(context.tr(k), style: const TextStyle(fontSize: 13.5))),
                     ],
                   ),
                 );
@@ -143,7 +128,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Diamonds are not refundable. If you had an active subscription, it will not be refunded either.',
+            context.tr('delete_no_refund_note'),
             style: TextStyle(color: context.surfaces.textDim, fontSize: 12),
           ),
           const SizedBox(height: 24),
@@ -154,14 +139,14 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             activeColor: AppColors.red,
-            title: const Text(
-              'I understand this is permanent and cannot be undone',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            title: Text(
+              context.tr('delete_understand_checkbox'),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 12),
 
-          Text('Type "$expected" to confirm', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+          Text(context.tr('delete_type_to_confirm').replaceAll('%s', expected), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
@@ -188,7 +173,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
               icon: _deleting
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.delete_forever, size: 18),
-              label: Text(_deleting ? 'Deleting...' : 'Delete My Account Permanently'),
+              label: Text(_deleting ? context.tr('deleting_ellipsis') : context.tr('delete_my_account_permanently')),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.red,
                 foregroundColor: Colors.white,
@@ -201,7 +186,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
           Center(
             child: TextButton(
               onPressed: _deleting ? null : () => Navigator.of(context).pop(),
-              child: const Text('Cancel, keep my account'),
+              child: Text(context.tr('cancel_keep_account')),
             ),
           ),
         ],

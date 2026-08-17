@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../providers/language_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 
@@ -63,7 +64,7 @@ class _DriveFolderPickerScreenState extends State<DriveFolderPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = _path.isEmpty ? 'My Drive' : _path.last['name']!;
+    final title = _path.isEmpty ? context.tr('my_drive_title') : _path.last['name']!;
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
@@ -74,16 +75,16 @@ class _DriveFolderPickerScreenState extends State<DriveFolderPickerScreen> {
           // Always-available option — no folder restriction at all.
           ListTile(
             leading: const Icon(Icons.folder_open_rounded, color: AppColors.purple),
-            title: const Text('Use Whole Drive', style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text('Scan every video in your Drive, no folder restriction'),
+            title: Text(context.tr('use_whole_drive'), style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text(context.tr('use_whole_drive_subtitle')),
             onTap: _selectWholeDrive,
           ),
           Divider(color: context.surfaces.border, height: 1),
           if (_path.isNotEmpty) ...[
             ListTile(
               leading: const Icon(Icons.check_circle_rounded, color: AppColors.green),
-              title: Text('Select "${_path.last['name']}"', style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Only auto-upload videos from this folder'),
+              title: Text('${context.tr('select_folder_prefix')} "${_path.last['name']}"', style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(context.tr('select_folder_subtitle')),
               onTap: _selectCurrentFolder,
             ),
             Divider(color: context.surfaces.border, height: 1),
@@ -92,7 +93,7 @@ class _DriveFolderPickerScreenState extends State<DriveFolderPickerScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _folders.isEmpty
-                    ? Center(child: Text('No sub-folders here', style: TextStyle(color: context.surfaces.textDim)))
+                    ? Center(child: Text(context.tr('no_subfolders'), style: TextStyle(color: context.surfaces.textDim)))
                     : ListView.builder(
                         itemCount: _folders.length,
                         itemBuilder: (context, index) {

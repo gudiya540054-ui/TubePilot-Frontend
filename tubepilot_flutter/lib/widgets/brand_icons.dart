@@ -58,12 +58,20 @@ class FacebookIcon extends StatelessWidget {
   }
 }
 
-// Rewritten: the previous version tried to compose the "f" from 3 separate
-// RRects (hook + stem + crossbar) with hand-tuned overlapping coordinates,
-// which produced a broken/misaligned glyph at render time. This version
-// draws the Facebook "f" as a SINGLE continuous vector path (matching the
-// real logomark's proportions), which renders correctly and consistently
-// at any icon size.
+// Rewritten AGAIN: the previous version tried to build the "f" as one
+// FILLED outline by manually stitching together the outer/inner edges of
+// the stem, crossbar notch, and hook as a single sequence of line/curve
+// points. Getting every one of those edges to line up pixel-perfectly by
+// hand is extremely error-prone — a single wrong coordinate anywhere in
+// that chain produces a lopsided notch or misaligned joint, which is
+// exactly the "broken f" that kept showing up.
+//
+// This version sidesteps that entirely: instead of drawing a filled
+// outline, it draws the "f" the way you'd actually write it — as a
+// STROKED path along the letter's skeleton (stem + hook as one continuous
+// path, crossbar as a second short stroke), using round caps/joins so the
+// strokes blend into each other cleanly with zero manual alignment. This
+// is far more robust and matches the real wordmark's proportions.
 class _FacebookPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -75,43 +83,30 @@ class _FacebookPainter extends CustomPainter {
     // Circle background
     canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF1877F2));
 
-    // Single continuous "f" path, proportional to icon size.
-    final stemW = w * 0.16;
-    final stemLeft = w * 0.50;
-    final stemRight = stemLeft + stemW;
-    final crossbarY = h * 0.46;
-    final crossbarH = h * 0.13;
-    final stemBottom = h * 0.82;
-    final hookTopY = h * 0.22;
+    final strokeWidth = w * 0.15;
+    final strokePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
 
-    final path = Path()
-      // Start at bottom-left of stem
-      ..moveTo(stemLeft, stemBottom)
-      // Up the left side of the stem to where the crossbar notch begins
-      ..lineTo(stemLeft, crossbarY + crossbarH)
-      // Left into the crossbar notch
-      ..lineTo(w * 0.36, crossbarY + crossbarH)
-      ..lineTo(w * 0.36, crossbarY)
-      ..lineTo(stemLeft, crossbarY)
-      // Up to where the rounded hook begins
-      ..lineTo(stemLeft, hookTopY + stemW * 0.5)
-      // Rounded hook at the top (curves up and over to the right)
-      ..quadraticBezierTo(stemLeft, hookTopY, stemLeft + stemW * 0.5, hookTopY)
-      ..lineTo(w * 0.66, hookTopY)
-      ..lineTo(w * 0.66, hookTopY + stemW * 0.9)
-      ..lineTo(stemRight, hookTopY + stemW * 0.9)
-      // Down the right side of the stem to the crossbar
-      ..lineTo(stemRight, crossbarY)
-      // Right edge of crossbar
-      ..lineTo(stemRight, crossbarY + crossbarH)
-      // Down the right side of the stem to the bottom
-      ..lineTo(stemRight, stemBottom)
-      // Rounded bottom edge back to start
-      ..quadraticBezierTo(stemRight, stemBottom + stemW * 0.3, stemLeft + stemW * 0.5, stemBottom + stemW * 0.3)
-      ..quadraticBezierTo(stemLeft, stemBottom + stemW * 0.3, stemLeft, stemBottom)
-      ..close();
+    // Stem + top hook as ONE continuous path — the curve into the hook is
+    // a natural extension of the stem line, so there's no seam/joint to
+    // misalign in the first place.
+    final stemAndHook = Path()
+      ..moveTo(w * 0.54, h * 0.80)
+      ..lineTo(w * 0.54, h * 0.30)
+      ..quadraticBezierTo(w * 0.54, h * 0.20, w * 0.64, h * 0.20)
+      ..lineTo(w * 0.70, h * 0.20);
+    canvas.drawPath(stemAndHook, strokePaint);
 
-    canvas.drawPath(path, Paint()..color = Colors.white..style = PaintingStyle.fill);
+    // Crossbar — a short horizontal stroke through the stem, just below
+    // its midpoint (matches the real Facebook wordmark's proportions).
+    final crossbar = Path()
+      ..moveTo(w * 0.40, h * 0.52)
+      ..lineTo(w * 0.62, h * 0.52);
+    canvas.drawPath(crossbar, strokePaint);
   }
 
   @override

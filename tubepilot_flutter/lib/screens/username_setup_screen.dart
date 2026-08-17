@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/language_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_provider.dart';
 import '../services/api_service.dart';
@@ -19,7 +20,10 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
   String _language = 'English';
   bool _loading = false;
 
-  final _languages = const ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu', 'Bengali'];
+  // NOTE: kept as language NAMES (not translated) since this list is sent
+  // to the backend as-is and also drives ApiService.setupUsername(language: ...).
+  // Extended to match the same 7 languages now offered in Settings.
+  final _languages = const ['English', 'Hindi', 'Hinglish', 'Tamil', 'Bengali', 'Marathi', 'Urdu'];
 
   @override
   void initState() {
@@ -27,7 +31,6 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     _prefillSuggestedUsername();
   }
 
-  // Auto-suggests a username from the user's name/email so they don't have to think one up.
   void _prefillSuggestedUsername() {
     final user = context.read<AuthProvider>().user ?? {};
     String base = (user['name'] ?? '').toString().trim();
@@ -45,7 +48,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
   Future<void> _save() async {
     final username = _usernameCtrl.text.trim().replaceFirst('@', '');
     if (username.length < 3) {
-      showToast(context, 'Username must be at least 3 characters', isError: true);
+      showToast(context, context.tr('username_min_length_error'), isError: true);
       return;
     }
     setState(() => _loading = true);
@@ -60,7 +63,6 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
     }
   }
 
-  // Step 1: Welcome + 20 free credits popup. Step 2: prompt to connect YouTube channel now.
   Future<void> _showReferralDialog() async {
     final referralCtrl = TextEditingController();
     bool submitting = false;
@@ -71,12 +73,12 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text('Have a referral code?'),
+          title: Text(context.tr('referral_dialog_title')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Enter a friend\'s code and you\'ll both get 5 bonus diamonds.'),
+              Text(context.tr('referral_dialog_body')),
               const SizedBox(height: 14),
               TextField(
                 controller: referralCtrl,
@@ -88,7 +90,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
           actions: [
             TextButton(
               onPressed: submitting ? null : () => Navigator.pop(dialogContext),
-              child: const Text('Skip'),
+              child: Text(context.tr('skip')),
             ),
             ElevatedButton(
               onPressed: submitting
@@ -102,7 +104,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                       setDialogState(() => submitting = true);
                       try {
                         final res = await ApiService.instance.applyReferralCode(code);
-                        if (mounted) showToast(context, res['message'] ?? 'Referral applied!', isSuccess: true);
+                        if (mounted) showToast(context, res['message'] ?? context.tr('referral_applied'), isSuccess: true);
                       } catch (e) {
                         if (mounted) showApiError(context, e);
                       } finally {
@@ -111,7 +113,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                     },
               child: submitting
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Apply'),
+                  : Text(context.tr('apply')),
             ),
           ],
         ),
@@ -125,14 +127,14 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Row(children: const [
-          Icon(Icons.celebration_rounded, color: AppColors.purple, size: 22),
-          SizedBox(width: 8),
-          Expanded(child: Text('Welcome to Tube Pilot!')),
+        title: Row(children: [
+          const Icon(Icons.celebration_rounded, color: AppColors.purple, size: 22),
+          const SizedBox(width: 8),
+          Expanded(child: Text(context.tr('welcome_title'))),
         ]),
-        content: const Text("You've got 20 free video upload credits and 10 bonus diamonds to get started."),
+        content: Text(context.tr('welcome_body')),
         actions: [
-          ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Let\'s go')),
+          ElevatedButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('lets_go'))),
         ],
       ),
     );
@@ -146,15 +148,15 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Row(children: const [
-          YoutubeIcon(size: 22),
-          SizedBox(width: 10),
-          Expanded(child: Text('Connect your YouTube channel')),
+        title: Row(children: [
+          const YoutubeIcon(size: 22),
+          const SizedBox(width: 10),
+          Expanded(child: Text(context.tr('connect_youtube_title'))),
         ]),
-        content: const Text('Connect now so Tube Pilot can upload and schedule videos straight to your channel.'),
+        content: Text(context.tr('connect_youtube_body')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Later')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Connect Channel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.tr('later'))),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text(context.tr('connect_channel'))),
         ],
       ),
     );
@@ -185,7 +187,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 30),
-              const Text("Let's set up\nyour profile 👋", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+              Text(context.tr('setup_profile_title'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
               const SizedBox(height: 24),
               Center(
                 child: Container(
@@ -197,16 +199,16 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              Text('Username', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+              Text(context.tr('username_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
               const SizedBox(height: 4),
-              Text('We suggested one for you — feel free to change it', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
+              Text(context.tr('username_suggested_hint'), style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
               const SizedBox(height: 6),
               TextField(
                 controller: _usernameCtrl,
                 decoration: const InputDecoration(hintText: '@tech_creator', prefixIcon: Icon(Icons.alternate_email_rounded, size: 18)),
               ),
               const SizedBox(height: 16),
-              Text('Select Language', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+              Text(context.tr('select_language_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 initialValue: _language,
@@ -215,7 +217,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                 decoration: const InputDecoration(prefixIcon: Icon(Icons.language_rounded, size: 18)),
               ),
               const SizedBox(height: 30),
-              GradientButton(label: 'Continue', loading: _loading, onPressed: _save),
+              GradientButton(label: context.tr('continue_btn'), loading: _loading, onPressed: _save),
             ],
           ),
         ),

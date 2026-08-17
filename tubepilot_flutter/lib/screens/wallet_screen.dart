@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../providers/language_provider.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -33,12 +34,12 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     }
   }
 
-  (Color, String) _statusBadge(String status) {
+  (Color, String) _statusBadge(BuildContext context, String status) {
     switch (status) {
-      case 'pending': return (AppColors.diamond, 'Pending');
-      case 'approved': return (AppColors.green, 'Approved');
-      case 'rejected': return (AppColors.red, 'Rejected');
-      case 'completed': return (AppColors.green, 'Completed');
+      case 'pending': return (AppColors.diamond, context.tr('status_pending'));
+      case 'approved': return (AppColors.green, context.tr('status_approved'));
+      case 'rejected': return (AppColors.red, context.tr('status_rejected'));
+      case 'completed': return (AppColors.green, context.tr('status_completed'));
       default: return (AppColors.diamond, status);
     }
   }
@@ -58,9 +59,9 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wallet'),
-        bottom: TabBar(controller: _tabController, labelColor: AppColors.purple, indicatorColor: AppColors.purple, tabs: const [
-          Tab(text: 'Transactions'), Tab(text: 'Purchases'),
+        title: Text(context.tr('wallet_title')),
+        bottom: TabBar(controller: _tabController, labelColor: AppColors.purple, indicatorColor: AppColors.purple, tabs: [
+          Tab(text: context.tr('transactions_tab')), Tab(text: context.tr('purchases_tab')),
         ]),
       ),
       body: loading
@@ -74,7 +75,7 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                     padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(18)),
                     child: Column(children: [
-                      Text('Total Diamonds', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+                      Text(context.tr('total_diamonds'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
                       const SizedBox(height: 6),
                       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                         const Icon(Icons.diamond_rounded, color: AppColors.diamond, size: 24),
@@ -82,15 +83,15 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
                         Text('${wallet?['diamondBalance'] ?? 0}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
                       ]),
                       const SizedBox(height: 6),
-                      Text('${wallet?['freeUploadsRemaining'] ?? 0} free uploads remaining this month', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
+                      Text(context.tr('free_uploads_remaining').replaceAll('%d', '${wallet?['freeUploadsRemaining'] ?? 0}'), style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
                     ]),
                   ),
                   const SizedBox(height: 20),
                   SizedBox(
                     height: 400,
                     child: TabBarView(controller: _tabController, children: [
-                      _buildList(all),
-                      _buildList(purchasesOnly),
+                      _buildList(context, all),
+                      _buildList(context, purchasesOnly),
                     ]),
                   ),
                 ],
@@ -99,8 +100,8 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildList(List list) {
-    if (list.isEmpty) return const EmptyView(message: 'No transactions yet', icon: Icons.receipt_long_outlined);
+  Widget _buildList(BuildContext context, List list) {
+    if (list.isEmpty) return EmptyView(message: context.tr('no_transactions_yet'), icon: Icons.receipt_long_outlined);
     return ListView.builder(
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
@@ -108,9 +109,11 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
       itemBuilder: (_, i) {
         final t = list[i];
         final isSpend = t['type'] == 'diamond_spend';
-        final label = t['type'] == 'diamond_purchase' ? 'Diamond Pack (${t['diamondPackage']})' : (isSpend ? 'Video Scheduled' : 'Diamond Refund');
+        final label = t['type'] == 'diamond_purchase'
+            ? context.tr('diamond_pack_label').replaceAll('%s', '${t['diamondPackage']}')
+            : (isSpend ? context.tr('video_scheduled_label') : context.tr('diamond_refund_label'));
         final amount = t['type'] == 'diamond_purchase' ? '+${t['diamondPackage']}' : (isSpend ? '-${t['diamondsForSpend']}' : '+${t['diamondsForSpend']}');
-        final (color, statusLabel) = _statusBadge(t['status'] ?? '');
+        final (color, statusLabel) = _statusBadge(context, t['status'] ?? '');
         final (icon, iconColor) = _txnIcon(t, isSpend);
         return Container(
           margin: const EdgeInsets.only(bottom: 10),

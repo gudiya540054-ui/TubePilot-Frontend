@@ -4,6 +4,7 @@ import '../services/auth_provider.dart';
 import '../services/storage_service.dart';
 import '../services/push_service.dart';
 import '../theme/app_theme.dart';
+import '../providers/language_provider.dart';
 import 'onboarding_screen.dart';
 import 'login_screen.dart';
 import 'dashboard_screen.dart';
@@ -171,7 +172,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppColors.purple.withOpacity(0.7))),
                       ),
                       const SizedBox(width: 10),
-                      Text('Setting things up...', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.black45)),
+                      Text(context.tr('setting_things_up'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Colors.black45)),
                     ],
                   ),
                 ],
@@ -179,15 +180,15 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             ),
 
             // Bottom Text
-            const Positioned(
+            Positioned(
               left: 0,
               right: 0,
               bottom: 28,
               child: Center(
                 child: Text(
-                  'Powered by Bharat Cloud Technology',
+                  context.tr('powered_by'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: Colors.black54,

@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../providers/language_provider.dart';
 
+// NOTE ON LOCALIZATION SCOPE: only the app-bar title and the "Last
+// updated" label below are wired to context.tr(). The 10 legal-text
+// sections themselves are intentionally left in English — translating
+// privacy-policy / legal language automatically risks subtly changing its
+// legal meaning, which is a real (not cosmetic) risk for a document like
+// this. If multi-language legal text is needed, get these 10 section
+// bodies professionally translated and reviewed, then either add them as
+// new translation keys here or keep them as separate per-language static
+// content.
 class PrivacyPolicyScreen extends StatefulWidget {
   const PrivacyPolicyScreen({super.key});
 
@@ -145,7 +155,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy Policy')),
+      appBar: AppBar(title: Text(context.tr('privacy_policy_title'))),
       floatingActionButton: _showScrollTop
           ? FloatingActionButton.small(
               onPressed: _scrollToTop,
@@ -160,7 +170,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
           Row(children: [
             Icon(Icons.privacy_tip_outlined, size: 15, color: context.surfaces.textDim),
             const SizedBox(width: 6),
-            Text('Last updated: ${DateTime.now().year}', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
+            Text(context.tr('last_updated').replaceAll('%d', '${DateTime.now().year}'), style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
           ]),
           const SizedBox(height: 16),
           ..._sections.map((s) => Padding(

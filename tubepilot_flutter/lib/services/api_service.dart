@@ -166,12 +166,34 @@ class ApiService {
   Future<Map<String, dynamic>> getDriveOAuthUrl() => _request('/drive/oauth/url?platform=mobile');
   Future<Map<String, dynamic>> getDriveStatus() => _request('/drive/status');
   Future<Map<String, dynamic>> disconnectDrive() => _request('/drive/disconnect', method: 'DELETE');
-  Future<Map<String, dynamic>> updateDriveSettings({String? dailyUploadTime, String? folderId, String? folderName}) =>
+
+  // ⚠️ FIX: previously `folderId`/`folderName` were ALWAYS included in the
+  // request body (even as `null`), regardless of whether the caller passed
+  // them. That meant a call like `updateDriveSettings(dailyUploadTime: t)`
+  // — made from the "change daily upload time" flow, which never touches
+  // folder — silently sent `folderId: null, folderName: null` too. The
+  // backend treats an explicit `null` (as opposed to a missing/undefined
+  // key) as "clear this field", so every time-only update was WIPING the
+  // user's selected folder back to "Whole Drive" without them asking for
+  // it. That's the exact bug behind "folder apne aap change ho jaata hai".
+  //
+  // Fix: only include `folderId`/`folderName` in the body when the caller
+  // is actually intending to change folder scope. `clearFolder: true` is
+  // the explicit, intentional way to reset to "Whole Drive" (used by the
+  // folder picker when the user picks "Use Whole Drive") — a plain
+  // time-only call no longer touches folder state at all.
+  Future<Map<String, dynamic>> updateDriveSettings({
+    String? dailyUploadTime,
+    String? folderId,
+    String? folderName,
+    bool clearFolder = false,
+  }) =>
       _request('/drive/settings', method: 'PATCH', body: {
         if (dailyUploadTime != null) 'dailyUploadTime': dailyUploadTime,
-        'folderId': folderId,
-        'folderName': folderName,
+        if (folderId != null || clearFolder) 'folderId': folderId,
+        if (folderName != null || clearFolder) 'folderName': folderName,
       });
+
   Future<Map<String, dynamic>> listDriveFolders({String? parentId}) =>
       _request('/drive/folders${parentId != null ? '?parentId=$parentId' : ''}');
 
@@ -246,6 +268,12 @@ class ApiService {
       _request('/notifications/register-device', method: 'POST', body: {'fcmToken': fcmToken});
   Future<Map<String, dynamic>> registerOneSignalPlayerId(String playerId) =>
       _request('/notifications/register-onesignal-player', method: 'POST', body: {'playerId': playerId});
+
+  Future<Map<String, dynamic>> deleteNotification(String id) =>
+      _request('/notifications/$id', method: 'DELETE');
+
+  Future<Map<String, dynamic>> deleteAllNotifications() =>
+      _request('/notifications', method: 'DELETE');
 
   // ---------------- Analytics ----------------
   Future<Map<String, dynamic>> getAnalytics() => _request('/analytics');

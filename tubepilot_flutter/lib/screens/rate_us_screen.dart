@@ -4,6 +4,7 @@ import '../services/auth_provider.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../providers/language_provider.dart';
 
 /// Checks the backend for whether the weekly Rate Us prompt should be shown,
 /// and if so, presents it as a bottom sheet. Safe to call after any screen
@@ -34,7 +35,7 @@ class RateUsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Rate Us')),
+      appBar: AppBar(title: Text(context.tr('rate_us_title'))),
       body: const RateUsBody(isPopup: false),
     );
   }
@@ -61,7 +62,9 @@ class _RateUsBodyState extends State<RateUsBody> {
   late final TextEditingController _reviewCtrl;
   late final TextEditingController _emailCtrl;
 
-  static const _starLabels = {1: 'Poor', 2: 'Fair', 3: 'Good', 4: 'Great', 5: 'Excellent'};
+  // Values are translation KEYS now (not display text) — resolved via
+  // context.tr() in build() so the star label follows the selected language.
+  static const _starLabelKeys = {1: 'star_poor', 2: 'star_fair', 3: 'star_good', 4: 'star_great', 5: 'star_excellent'};
 
   @override
   void initState() {
@@ -111,7 +114,7 @@ class _RateUsBodyState extends State<RateUsBody> {
 
   Future<void> _submit() async {
     if (_stars == 0) {
-      showToast(context, 'Please select a star rating first', isError: true);
+      showToast(context, context.tr('select_star_first_error'), isError: true);
       return;
     }
     setState(() => _submitting = true);
@@ -123,7 +126,7 @@ class _RateUsBodyState extends State<RateUsBody> {
       );
       if (!mounted) return;
       setState(() => _savedRating = res['rating']);
-      showToast(context, 'Thanks for your feedback!', isSuccess: true);
+      showToast(context, context.tr('thanks_for_feedback'), isSuccess: true);
       if (widget.isPopup) {
         await Future.delayed(const Duration(milliseconds: 900));
         if (mounted) Navigator.of(context).maybePop();
@@ -176,9 +179,9 @@ class _RateUsBodyState extends State<RateUsBody> {
             child: const Center(child: Icon(Icons.star_rounded, color: Colors.white, size: 30)),
           ),
           const SizedBox(height: 14),
-          const Text('Enjoying Tube Pilot?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(context.tr('enjoying_app'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          Text('Let us know how we\'re doing', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+          Text(context.tr('let_us_know'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
           const SizedBox(height: 24),
 
           Row(
@@ -203,17 +206,17 @@ class _RateUsBodyState extends State<RateUsBody> {
           // ("4 stars") reads as an actual sentiment ("Great").
           if (_stars > 0) ...[
             const SizedBox(height: 8),
-            Text(_starLabels[_stars] ?? '', style: const TextStyle(color: AppColors.diamond, fontSize: 13, fontWeight: FontWeight.w700)),
+            Text(context.tr(_starLabelKeys[_stars] ?? ''), style: const TextStyle(color: AppColors.diamond, fontSize: 13, fontWeight: FontWeight.w700)),
           ],
           const SizedBox(height: 20),
 
           Row(children: [
-            Text('Your Review', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+            Text(context.tr('your_review'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
             const SizedBox(width: 8),
             if (_loadingSuggestion) ...[
               const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.purple)),
               const SizedBox(width: 6),
-              Text('AI writing a suggestion...', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
+              Text(context.tr('ai_writing_suggestion'), style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
             ],
           ]),
           const SizedBox(height: 6),
@@ -222,11 +225,11 @@ class _RateUsBodyState extends State<RateUsBody> {
             maxLines: 4,
             maxLength: 500,
             onChanged: (_) => _reviewManuallyEdited = true,
-            decoration: const InputDecoration(hintText: 'Select a star rating to auto-fill, or write your own review...'),
+            decoration: InputDecoration(hintText: context.tr('review_hint')),
           ),
           const SizedBox(height: 6),
 
-          Text('Your Email', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+          Text(context.tr('your_email'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
           const SizedBox(height: 6),
           TextField(
             controller: _emailCtrl,
@@ -235,12 +238,12 @@ class _RateUsBodyState extends State<RateUsBody> {
           ),
           const SizedBox(height: 24),
 
-          GradientButton(label: 'Save Rating', loading: _submitting, onPressed: _submit),
+          GradientButton(label: context.tr('save_rating'), loading: _submitting, onPressed: _submit),
           const SizedBox(height: 10),
           Center(
             child: TextButton(
               onPressed: _skip,
-              child: Text('Skip', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+              child: Text(context.tr('skip'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
             ),
           ),
         ],
@@ -268,7 +271,7 @@ class _RateUsBodyState extends State<RateUsBody> {
             ),
           const Icon(Icons.check_circle_rounded, color: AppColors.green, size: 40),
           const SizedBox(height: 12),
-          const Text('Thanks for your feedback!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text(context.tr('thanks_for_feedback'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
           Container(
             width: double.infinity,
@@ -301,7 +304,7 @@ class _RateUsBodyState extends State<RateUsBody> {
           ),
           const SizedBox(height: 16),
           if (widget.isPopup)
-            TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
+            TextButton(onPressed: () => Navigator.of(context).maybePop(), child: Text(context.tr('close'))),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
+import '../providers/language_provider.dart';
 import 'login_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -9,18 +10,21 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
+// Now holds translation KEYS instead of display text — resolved via
+// context.tr() when building each page, so swiping/tapping between steps
+// always shows the currently selected language.
 class _OnboardingStep {
   final IconData icon;
-  final String title;
-  final String desc;
-  const _OnboardingStep(this.icon, this.title, this.desc);
+  final String titleKey;
+  final String descKey;
+  const _OnboardingStep(this.icon, this.titleKey, this.descKey);
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _steps = const [
-    _OnboardingStep(Icons.cloud_upload_rounded, 'Schedule videos from anywhere.', 'Set a date and time, and Tube Pilot uploads it for you automatically.'),
-    _OnboardingStep(Icons.phonelink_off_rounded, 'Phone off? Video still uploads.', 'Our cloud storage system holds your video safely until upload time.'),
-    _OnboardingStep(Icons.auto_awesome_rounded, 'Earn time, not stress.', 'AI titles, tags, and descriptions save hours of manual work.'),
+    _OnboardingStep(Icons.cloud_upload_rounded, 'onboarding_title_1', 'onboarding_desc_1'),
+    _OnboardingStep(Icons.phonelink_off_rounded, 'onboarding_title_2', 'onboarding_desc_2'),
+    _OnboardingStep(Icons.auto_awesome_rounded, 'onboarding_title_3', 'onboarding_desc_3'),
   ];
 
   int _step = 0;
@@ -59,7 +63,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(onPressed: _finish, child: Text('Skip', style: TextStyle(color: context.surfaces.textDim))),
+                  TextButton(onPressed: _finish, child: Text(context.tr('skip'), style: TextStyle(color: context.surfaces.textDim))),
                 ],
               ),
               // ---------------- Swipeable step pages ----------------
@@ -91,11 +95,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        Text(s.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+                        Text(context.tr(s.titleKey), textAlign: TextAlign.center, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 10),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(s.desc, textAlign: TextAlign.center, style: TextStyle(color: context.surfaces.textDim)),
+                          child: Text(context.tr(s.descKey), textAlign: TextAlign.center, style: TextStyle(color: context.surfaces.textDim)),
                         ),
                       ],
                     );
@@ -131,7 +135,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       _finish();
                     }
                   },
-                  child: Text(_step == _steps.length - 1 ? 'Get Started' : 'Next'),
+                  child: Text(_step == _steps.length - 1 ? context.tr('get_started') : context.tr('next')),
                 ),
               ),
               const SizedBox(height: 24),

@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../services/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../providers/language_provider.dart';
 
 class ReferEarnScreen extends StatelessWidget {
   const ReferEarnScreen({super.key});
@@ -15,7 +16,7 @@ class ReferEarnScreen extends StatelessWidget {
     final code = (user['referralCode'] ?? '').toString();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Refer & Earn')),
+      appBar: AppBar(title: Text(context.tr('refer_earn'))),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -30,11 +31,11 @@ class ReferEarnScreen extends StatelessWidget {
                   child: const Icon(Icons.card_giftcard_rounded, color: Colors.white, size: 30),
                 ),
                 const SizedBox(height: 12),
-                const Text('Invite friends, earn diamonds', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+                Text(context.tr('invite_friends_earn'), style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
                 const SizedBox(height: 6),
-                const Text(
-                  'You and your friend both get bonus diamonds when they sign up with your code.',
-                  style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                Text(
+                  context.tr('refer_earn_body'),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12.5),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -42,7 +43,7 @@ class ReferEarnScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          Text('Your referral code', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+          Text(context.tr('your_referral_code'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(18),
@@ -55,7 +56,7 @@ class ReferEarnScreen extends StatelessWidget {
                   icon: const Icon(Icons.copy_outlined),
                   onPressed: code.isEmpty ? null : () {
                     Clipboard.setData(ClipboardData(text: code));
-                    showToast(context, 'Referral code copied!', isSuccess: true);
+                    showToast(context, context.tr('referral_code_copied'), isSuccess: true);
                   },
                 ),
               ],
@@ -64,28 +65,27 @@ class ReferEarnScreen extends StatelessWidget {
           const SizedBox(height: 16),
 
           GradientButton(
-            label: 'Share Invite',
+            label: context.tr('share_invite'),
             icon: Icons.share_outlined,
             onPressed: code.isEmpty ? null : () {
               SharePlus.instance.share(ShareParams(
-                text: 'Join me on Tube Pilot and schedule your YouTube uploads effortlessly! '
-                    'Use my referral code "$code" when you sign up to get bonus diamonds.',
+                text: context.tr('share_invite_message').replaceAll('%s', code),
               ));
             },
           ),
           const SizedBox(height: 24),
 
-          Text('How it works', style: TextStyle(color: context.surfaces.textDim, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text(context.tr('how_it_works'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
-          _step(Icons.ios_share_rounded, 'Share your code with a friend'),
-          _step(Icons.person_add_alt_1_rounded, 'They enter it during sign up'),
-          _step(Icons.diamond_rounded, 'You both get bonus diamonds instantly'),
+          _step(context, Icons.ios_share_rounded, context.tr('refer_step_1')),
+          _step(context, Icons.person_add_alt_1_rounded, context.tr('refer_step_2')),
+          _step(context, Icons.diamond_rounded, context.tr('refer_step_3')),
         ],
       ),
     );
   }
 
-  Widget _step(IconData icon, String text) {
+  Widget _step(BuildContext context, IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(

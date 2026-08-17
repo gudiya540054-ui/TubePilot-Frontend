@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../providers/language_provider.dart';
 import '../widgets/common.dart';
 import '../widgets/brand_icons.dart';
 import 'upload_screen.dart';
@@ -8,6 +9,7 @@ import 'upcoming_screen.dart';
 import 'analytics_screen.dart';
 import 'profile_screen.dart';
 import 'diamond_store_screen.dart';
+import 'wallet_screen.dart';
 import 'notifications_screen.dart';
 import 'preview_screen.dart';
 import 'rate_us_screen.dart';
@@ -50,16 +52,10 @@ class _DashboardHomeState extends State<_DashboardHome> {
   List<dynamic> notifications = [];
   int unreadCount = 0;
 
-  // Connected-account status, one entry per platform card in the grid.
-  // NOTE: Instagram intentionally removed from this screen's UI per product
-  // decision — only YouTube, Facebook, and Drive are shown here now.
   Map<String, dynamic>? youtubeChannel;
   Map<String, dynamic>? driveStatus;
   Map<String, dynamic>? facebookStatus;
 
-  // Flattened, time-sorted list of platform-level publish events built from
-  // /api/videos?status=queued (each item: {videoId, platform, title,
-  // scheduledAt, thumbnailUrl}).
   List<Map<String, dynamic>> upcomingEvents = [];
 
   bool loading = true;
@@ -113,7 +109,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
         final aTime = a['scheduledAt'] as String?;
         final bTime = b['scheduledAt'] as String?;
         if (aTime == null && bTime == null) return 0;
-        if (aTime == null) return -1; // "publish now" items float to top
+        if (aTime == null) return -1;
         if (bTime == null) return 1;
         return aTime.compareTo(bTime);
       });
@@ -135,32 +131,51 @@ class _DashboardHomeState extends State<_DashboardHome> {
   }
 
   void _goToProfile() {
-    // Every "Connect" action for every platform already lives in
-    // ProfileScreen (single source of truth for OAuth flows) — the
-    // dashboard's Connected Accounts grid links there instead of
-    // duplicating the connect logic.
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())).then((_) => _load(showLoader: false));
   }
 
   void _openPreview(Map<String, dynamic> event) {
-    // Preview needs the shared video file URL, which lives on the parent
-    // Video document, not the per-platform target — reusing UpcomingScreen
-    // for playback avoids duplicating that lookup here.
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UpcomingScreen())).then((_) => _load(showLoader: false));
   }
 
-  static const _platformMeta = {
-    'youtube': (label: 'YouTube', color: AppColors.red),
-    'facebook': (label: 'Facebook', color: AppColors.diamond),
-  };
+  String? get _userEmail {
+    final email = data?['email'] ?? data?['user']?['email'] ?? data?['account']?['email'];
+    return (email is String && email.isNotEmpty) ? email : null;
+  }
+
+  String get _userInitial {
+    final email = _userEmail;
+    return (email != null) ? email.trim()[0].toUpperCase() : '?';
+  }
+
+  int get _diamondCostPerUpload {
+    final cost = data?['diamondCostPerUpload'] ?? data?['uploadCostDiamonds'];
+    if (cost is num && cost > 0) return cost.toInt();
+    return 10;
+  }
+
+  ({String label, Color color}) _platformMeta(BuildContext context, String? platform) {
+    switch (platform) {
+      case 'youtube':
+        return (label: context.tr('platform_youtube_label'), color: AppColors.red);
+      case 'facebook':
+        return (label: context.tr('platform_facebook_label'), color: AppColors.diamond);
+      default:
+        return (label: platform ?? '', color: AppColors.purple);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final diamondBalance = (data?['diamondBalance'] ?? 0) as num;
+    final worthUploads = diamondBalance ~/ _diamondCostPerUpload;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TubePilot'),
+        title: Text(context.tr('app_title')),
         actions: [
           Stack(
+            clipBehavior: Clip.none,
             children: [
               IconButton(
                 icon: const Icon(Icons.notifications_outlined),
@@ -169,6 +184,29 @@ class _DashboardHomeState extends State<_DashboardHome> {
               if (unreadCount > 0)
                 Positioned(right: 10, top: 10, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.red, shape: BoxShape.circle))),
             ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 14, left: 2),
+            child: Tooltip(
+              message: context.tr('profile_tooltip'),
+              child: GestureDetector(
+                onTap: _goToProfile,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.gradient,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Theme.of(context).colorScheme.surface, width: 1.5),
+                  ),
+                  child: Text(
+                    _userInitial,
+                    style: const TextStyle(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -179,51 +217,119 @@ class _DashboardHomeState extends State<_DashboardHome> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
                 children: [
-                  // ---------------- Quick Upload banner ----------------
+                  // ---------------- Diamond Balance card ----------------
                   Container(
                     padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(gradient: AppColors.gradient, borderRadius: BorderRadius.circular(20)),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.gradient,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(color: AppColors.purple.withOpacity(0.30), blurRadius: 22, offset: const Offset(0, 10)),
+                      ],
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Diamond Balance', style: TextStyle(color: Colors.white70, fontSize: 12.5)),
-                                const SizedBox(height: 4),
-                                Row(children: [
-                                  const Text('💎 ', style: TextStyle(fontSize: 18)),
-                                  Text('${data?['diamondBalance'] ?? 0}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-                                ]),
-                              ],
-                            ),
-                            ElevatedButton(
-                              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiamondStoreScreen())).then((_) => _load(showLoader: false)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white.withOpacity(0.22),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                            Container(
+                              width: 46,
+                              height: 46,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withOpacity(0.35), width: 1.2),
                               ),
-                              child: const Text('+ Buy', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                              child: const Text('💎', style: TextStyle(fontSize: 22)),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(context.tr('diamond_balance_home'), style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '$diamondBalance',
+                                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, height: 1.05),
+                                  ),
+                                  if (worthUploads > 0) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _fmt(context.tr('diamonds_worth_uploads'), worthUploads),
+                                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            // ⚠️ FIX: "Top Up" previously opened DiamondStoreScreen
+                            // — the same screen "Buy More" opens right next to it,
+                            // making the button pointless. It now opens
+                            // WalletScreen (the "Subscription & Wallet" screen —
+                            // same one Profile & Settings links to), so the two
+                            // buttons on this card actually do different things:
+                            // "Top Up" -> view wallet/balance & transactions,
+                            // "Buy More" -> buy diamonds.
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletScreen())).then((_) => _load(showLoader: false)),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  side: const BorderSide(color: Colors.white, width: 1.2),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                                ),
+                                child: Text(context.tr('top_up'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DiamondStoreScreen())).then((_) => _load(showLoader: false)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: AppColors.purple,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                                ),
+                                child: Text(context.tr('buy_more'), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // ---------------- Quick Upload ----------------
                         SizedBox(
                           width: double.infinity,
-                          child: OutlinedButton.icon(
+                          child: OutlinedButton(
                             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UploadScreen())).then((_) => _load(showLoader: false)),
-                            icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                            label: const Text('Quick Upload', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.white, width: 1.3),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(color: Colors.white.withOpacity(0.55), width: 1.3),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.22), shape: BoxShape.circle),
+                                  child: const Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 14),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(context.tr('quick_upload'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                              ],
                             ),
                           ),
                         ),
@@ -233,10 +339,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   const SizedBox(height: 24),
 
                   // ---------------- Connected Accounts row ----------------
-                  // Only YouTube, Facebook, Drive — shown side-by-side (parallel
-                  // row) with real brand icons, per product decision. Instagram
-                  // is intentionally excluded from this screen.
-                  const Text('Connected Accounts', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(context.tr('connected_accounts_home'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 10),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -244,7 +347,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                       Expanded(
                         child: _accountCard(
                           icon: const YoutubeIcon(size: 20),
-                          label: youtubeChannel != null ? (youtubeChannel!['channelTitle'] ?? 'YouTube') : 'YouTube',
+                          label: youtubeChannel != null ? (youtubeChannel!['channelTitle'] ?? context.tr('platform_youtube_label')) : context.tr('platform_youtube_label'),
                           connected: youtubeChannel != null,
                         ),
                       ),
@@ -252,7 +355,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                       Expanded(
                         child: _accountCard(
                           icon: const FacebookIcon(size: 20),
-                          label: facebookStatus != null ? (facebookStatus!['pageName'] ?? 'Facebook') : 'Facebook',
+                          label: facebookStatus != null ? (facebookStatus!['pageName'] ?? context.tr('platform_facebook_label')) : context.tr('platform_facebook_label'),
                           connected: facebookStatus != null,
                         ),
                       ),
@@ -260,7 +363,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                       Expanded(
                         child: _accountCard(
                           icon: const DriveIcon(size: 20),
-                          label: 'Drive',
+                          label: context.tr('platform_drive_label'),
                           connected: driveStatus != null,
                         ),
                       ),
@@ -269,7 +372,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   const SizedBox(height: 24),
 
                   // ---------------- Stats grid ----------------
-                  const Text('Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(context.tr('overview'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 10),
                   GridView.count(
                     crossAxisCount: 2,
@@ -279,10 +382,10 @@ class _DashboardHomeState extends State<_DashboardHome> {
                     crossAxisSpacing: 12,
                     childAspectRatio: 1.7,
                     children: [
-                      StatCard(label: 'Free Uploads Left', value: '${data?['remainingFreeUploads'] ?? 0}'),
-                      StatCard(label: 'Diamond Balance', value: '${data?['diamondBalance'] ?? 0}'),
-                      StatCard(label: 'Videos Published', value: '${data?['totalUploadedVideos'] ?? 0}'),
-                      StatCard(label: 'Scheduled', value: '${upcomingEvents.length}'),
+                      StatCard(label: context.tr('stat_free_uploads_left'), value: '${data?['remainingFreeUploads'] ?? 0}'),
+                      StatCard(label: context.tr('stat_diamond_balance'), value: '$diamondBalance'),
+                      StatCard(label: context.tr('stat_videos_published'), value: '${data?['totalUploadedVideos'] ?? 0}'),
+                      StatCard(label: context.tr('stat_scheduled'), value: '${upcomingEvents.length}'),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -291,10 +394,10 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Upcoming Schedule', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      Text(context.tr('upcoming_schedule'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                       GestureDetector(
                         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UpcomingScreen())),
-                        child: Text('See all ›', style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5)),
+                        child: Text(context.tr('see_all'), style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5)),
                       ),
                     ],
                   ),
@@ -303,7 +406,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   const SizedBox(height: 24),
 
                   // ---------------- Recent Activity ----------------
-                  const Text('Recent Activity', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(context.tr('recent_activity_home'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 10),
                   _buildRecentActivity(),
                   const SizedBox(height: 20),
@@ -312,6 +415,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
             ),
     );
   }
+
+  String _fmt(String template, Object value) => template.replaceFirst('%d', '$value').replaceFirst('%s', '$value');
 
   Widget _accountCard({required Widget icon, required String label, required bool connected}) {
     return GestureDetector(
@@ -345,7 +450,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   decoration: BoxDecoration(color: connected ? AppColors.green : context.surfaces.textDim, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 4),
-                Text(connected ? 'Connected' : 'Connect', style: TextStyle(color: context.surfaces.textDim, fontSize: 10)),
+                Text(connected ? context.tr('connected_status') : context.tr('connect_status'), style: TextStyle(color: context.surfaces.textDim, fontSize: 10)),
               ],
             ),
           ],
@@ -359,21 +464,20 @@ class _DashboardHomeState extends State<_DashboardHome> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
-        child: Text('No upcoming publishes. Tap "Quick Upload" to schedule one.', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+        child: Text(context.tr('no_upcoming_publishes'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
       );
     }
 
     return Column(
       children: List.generate(upcomingEvents.length, (i) {
         final event = upcomingEvents[i];
-        final meta = _platformMeta[event['platform']] ?? (label: event['platform'].toString(), color: AppColors.purple);
+        final meta = _platformMeta(context, event['platform']);
         final isLast = i == upcomingEvents.length - 1;
 
         return IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Timeline rail: colored dot + connecting line down to the next item.
               Column(
                 children: [
                   Container(
@@ -405,13 +509,13 @@ class _DashboardHomeState extends State<_DashboardHome> {
                               Text(event['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
                               const SizedBox(height: 4),
                               Text(
-                                event['scheduledAt'] != null ? formatDateTime(event['scheduledAt']) : 'Publishing now',
+                                event['scheduledAt'] != null ? formatDateTime(event['scheduledAt']) : context.tr('publishing_now'),
                                 style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5),
                               ),
                             ],
                           ),
                         ),
-                        AppBadge(label: event['status'] == 'pending' ? 'Scheduled' : 'Queued', color: meta.color),
+                        AppBadge(label: event['status'] == 'pending' ? context.tr('status_scheduled') : context.tr('status_queued'), color: meta.color),
                       ],
                     ),
                   ),
@@ -441,7 +545,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
-        child: Text('No recent activity yet.', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+        child: Text(context.tr('no_recent_activity'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
       );
     }
 

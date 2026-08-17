@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../services/auth_provider.dart';
 import '../theme/app_theme.dart';
@@ -43,7 +44,7 @@ class _MetaPagePickerScreenState extends State<MetaPagePickerScreen> {
     try {
       await ApiService.instance.selectMetaPage(pageId);
       if (mounted) {
-        showToast(context, 'Facebook Page connected!', isSuccess: true);
+        showToast(context, context.tr('facebook_page_connected'), isSuccess: true);
         context.read<AuthProvider>().refreshUser();
         Navigator.of(context).pop();
       }
@@ -57,7 +58,7 @@ class _MetaPagePickerScreenState extends State<MetaPagePickerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Select a Facebook Page')),
+      appBar: AppBar(title: Text(context.tr('select_facebook_page_title'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Column(
@@ -65,13 +66,13 @@ class _MetaPagePickerScreenState extends State<MetaPagePickerScreen> {
                 Padding(
                   padding: const EdgeInsets.all(20),
                   child: Text(
-                    'You manage multiple Facebook Pages. Pick the one TubePilot should publish to.',
+                    context.tr('multiple_pages_body'),
                     style: TextStyle(color: context.surfaces.textDim, fontSize: 13, height: 1.4),
                   ),
                 ),
                 Expanded(
                   child: _pages.isEmpty
-                      ? Center(child: Text('No pending pages found', style: TextStyle(color: context.surfaces.textDim)))
+                      ? Center(child: Text(context.tr('no_pending_pages'), style: TextStyle(color: context.surfaces.textDim)))
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _pages.length,

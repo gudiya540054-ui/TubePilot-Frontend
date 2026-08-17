@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../providers/language_provider.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   final bool embedded;
@@ -39,7 +40,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final activity = (analytics?['recentActivity'] as List?) ?? [];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Analytics')),
+      appBar: AppBar(title: Text(context.tr('analytics_title'))),
       body: loading
           ? const LoadingView()
           : RefreshIndicator(
@@ -55,10 +56,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     crossAxisSpacing: 12,
                     childAspectRatio: 1.5,
                     children: [
-                      _statCard(Icons.cloud_done_rounded, 'Total Uploaded', '${analytics?['uploadCount'] ?? 0}'),
-                      _statCard(Icons.card_giftcard_rounded, 'Free Uploads Left', '${analytics?['freeUploadsLeft'] ?? 0}'),
-                      _statCard(Icons.diamond_rounded, 'Diamond Balance', '${analytics?['remainingUploadCredits'] ?? 0}'),
-                      _statCard(Icons.schedule_rounded, 'Scheduled Queue', '${analytics?['scheduledQueue'] ?? 0}'),
+                      _statCard(context, Icons.cloud_done_rounded, context.tr('total_uploaded'), '${analytics?['uploadCount'] ?? 0}'),
+                      _statCard(context, Icons.card_giftcard_rounded, context.tr('free_uploads_left'), '${analytics?['freeUploadsLeft'] ?? 0}'),
+                      _statCard(context, Icons.diamond_rounded, context.tr('diamond_balance'), '${analytics?['remainingUploadCredits'] ?? 0}'),
+                      _statCard(context, Icons.schedule_rounded, context.tr('scheduled_queue'), '${analytics?['scheduledQueue'] ?? 0}'),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -70,13 +71,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Uploads — Last 14 Days', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text(context.tr('uploads_last_14_days'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
                         const SizedBox(height: 4),
-                        Text('How consistently you\'ve been publishing', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
+                        Text(context.tr('uploads_consistency_subtitle'), style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5)),
                         const SizedBox(height: 16),
                         SizedBox(
                           height: 140,
-                          child: trend.isEmpty ? _emptyChartPlaceholder() : _buildTrendChart(trend),
+                          child: trend.isEmpty ? _emptyChartPlaceholder(context) : _buildTrendChart(context, trend),
                         ),
                         const SizedBox(height: 4),
                       ],
@@ -91,12 +92,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          const Text('Failed Uploads', style: TextStyle(fontWeight: FontWeight.w700)),
+                          Text(context.tr('failed_uploads'), style: const TextStyle(fontWeight: FontWeight.w700)),
                           AppBadge(label: '${analytics?['failedUploads'] ?? 0}', color: AppColors.red),
                         ]),
                         const SizedBox(height: 10),
                         Text(
-                          'Real view/watch-time/subscriber analytics will appear here once your connected YouTube channel has data via the YouTube Analytics API.',
+                          context.tr('analytics_placeholder_note'),
                           style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5),
                         ),
                       ],
@@ -105,23 +106,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   const SizedBox(height: 16),
 
                   // ---------------- Recent activity / usage record ----------------
-                  const Text('Recent Activity', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(context.tr('recent_activity'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 10),
                   if (activity.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
-                      child: Text('No activity yet.', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+                      child: Text(context.tr('no_activity_yet'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
                     )
                   else
-                    ...activity.map((a) => _activityRow(a as Map<String, dynamic>)),
+                    ...activity.map((a) => _activityRow(context, a as Map<String, dynamic>)),
                 ],
               ),
             ),
     );
   }
 
-  Widget _statCard(IconData icon, String label, String value) {
+  Widget _statCard(BuildContext context, IconData icon, String label, String value) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -154,13 +155,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _emptyChartPlaceholder() {
+  Widget _emptyChartPlaceholder(BuildContext context) {
     return Center(
-      child: Text('No uploads in the last 14 days', style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5)),
+      child: Text(context.tr('no_uploads_14_days'), style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5)),
     );
   }
 
-  Widget _buildTrendChart(List trend) {
+  Widget _buildTrendChart(BuildContext context, List trend) {
     final counts = trend.map((t) => (t['count'] as num?)?.toDouble() ?? 0).toList();
     final maxY = (counts.isEmpty ? 1.0 : counts.reduce((a, b) => a > b ? a : b));
     final barMaxY = maxY < 4 ? 4.0 : maxY + 1;
@@ -217,7 +218,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _activityRow(Map<String, dynamic> a) {
+  Widget _activityRow(BuildContext context, Map<String, dynamic> a) {
     final usedFreeUpload = a['usedFreeUpload'] == true;
     final diamondsCharged = a['diamondsCharged'] ?? 0;
     final status = a['status'] ?? '';
@@ -253,7 +254,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
                 const SizedBox(height: 3),
                 Text(
-                  usedFreeUpload ? 'Used a free upload' : (diamondsCharged > 0 ? 'Spent 💎 $diamondsCharged' : 'No charge'),
+                  usedFreeUpload
+                      ? context.tr('used_free_upload')
+                      : (diamondsCharged > 0 ? context.tr('spent_diamonds').replaceAll('%d', '$diamondsCharged') : context.tr('no_charge')),
                   style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5),
                 ),
               ],

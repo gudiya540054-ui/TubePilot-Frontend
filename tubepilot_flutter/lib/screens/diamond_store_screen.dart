@@ -7,6 +7,7 @@ import 'package:mime/mime.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../providers/language_provider.dart';
 
 class DiamondStoreScreen extends StatefulWidget {
   const DiamondStoreScreen({super.key});
@@ -64,7 +65,7 @@ class _DiamondStoreScreenState extends State<DiamondStoreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Diamond Store')),
+      appBar: AppBar(title: Text(context.tr('diamond_store_title'))),
       body: loading
           ? const LoadingView()
           : ListView(
@@ -74,12 +75,12 @@ class _DiamondStoreScreenState extends State<DiamondStoreScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
                   child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Text('Your Balance', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+                    Text(context.tr('your_balance'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
                     Text('💎 $balance', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                   ]),
                 ),
                 const SizedBox(height: 20),
-                const Text('Choose a Package', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                Text(context.tr('choose_package'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
                 ...packages.map((p) => Container(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -92,11 +93,11 @@ class _DiamondStoreScreenState extends State<DiamondStoreScreen> {
                             const Text('💎', style: TextStyle(fontSize: 24)),
                             const SizedBox(width: 10),
                             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text('${p['diamonds']} Diamonds', style: const TextStyle(fontWeight: FontWeight.w700)),
+                              Text(context.tr('diamonds_suffix').replaceAll('%d', '${p['diamonds']}'), style: const TextStyle(fontWeight: FontWeight.w700)),
                               Text('₹${p['priceINR']}', style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5)),
                             ]),
                           ]),
-                          ElevatedButton(onPressed: () => _selectPackage(p['diamonds'], p['priceINR']), child: const Text('Buy')),
+                          ElevatedButton(onPressed: () => _selectPackage(p['diamonds'], p['priceINR']), child: Text(context.tr('buy_btn'))),
                         ],
                       ),
                     )),
@@ -132,7 +133,7 @@ class _PaymentSheetState extends State<_PaymentSheet> {
 
   Future<void> _submit() async {
     if (_utrCtrl.text.trim().isEmpty) {
-      showToast(context, 'Please enter the UTR/transaction number', isError: true);
+      showToast(context, context.tr('enter_utr_error'), isError: true);
       return;
     }
     setState(() => submitting = true);
@@ -145,7 +146,7 @@ class _PaymentSheetState extends State<_PaymentSheet> {
       await ApiService.instance.uploadMultipart('/diamonds/purchase-request',
           fields: {'diamondPackage': '${widget.diamonds}', 'utrNumber': _utrCtrl.text.trim()}, files: files);
       if (!mounted) return;
-      showToast(context, 'Payment submitted! Diamonds will be added after admin approval.', isSuccess: true);
+      showToast(context, context.tr('payment_submitted_msg'), isSuccess: true);
       Navigator.pop(context);
       widget.onDone();
     } catch (e) {
@@ -165,7 +166,7 @@ class _PaymentSheetState extends State<_PaymentSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              const Text('Complete Payment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              Text(context.tr('complete_payment'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ]),
             Center(
@@ -173,39 +174,39 @@ class _PaymentSheetState extends State<_PaymentSheet> {
                 if (qr != null && qr != '')
                   ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(qr, width: 180, height: 180, fit: BoxFit.cover))
                 else
-                  Text('QR not set by admin yet', style: TextStyle(color: context.surfaces.textDim)),
+                  Text(context.tr('qr_not_set'), style: TextStyle(color: context.surfaces.textDim)),
                 const SizedBox(height: 10),
-                Text(widget.settings['upiId'] ?? 'UPI not configured', style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(widget.settings['upiId'] ?? context.tr('upi_not_configured'), style: const TextStyle(fontWeight: FontWeight.w700)),
                 Text(widget.settings['merchantName'] ?? '', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
                 const SizedBox(height: 10),
-                Text('Pay ₹${widget.price}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                Text(context.tr('pay_amount').replaceAll('%d', '${widget.price}'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
               ]),
             ),
             const SizedBox(height: 20),
             if (!showConfirmForm)
-              GradientButton(label: 'Payment Done', onPressed: () => setState(() => showConfirmForm = true))
+              GradientButton(label: context.tr('payment_done'), onPressed: () => setState(() => showConfirmForm = true))
             else ...[
-              Text('Amount Paid (₹)', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+              Text(context.tr('amount_paid_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
               const SizedBox(height: 6),
               TextField(enabled: false, controller: TextEditingController(text: '${widget.price}')),
               const SizedBox(height: 12),
-              Text('UTR / Transaction Number', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+              Text(context.tr('utr_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
               const SizedBox(height: 6),
               TextField(controller: _utrCtrl, decoration: const InputDecoration(hintText: 'e.g. 402812345678')),
               const SizedBox(height: 12),
-              Text('User ID', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+              Text(context.tr('user_id_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
               const SizedBox(height: 6),
               TextField(enabled: false, controller: TextEditingController(text: widget.userId)),
               const SizedBox(height: 12),
-              Text('Screenshot (optional)', style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
+              Text(context.tr('screenshot_optional_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
               const SizedBox(height: 6),
               OutlinedButton.icon(
                 onPressed: _pickScreenshot,
                 icon: const Icon(Icons.image_outlined, size: 18),
-                label: Text(screenshot == null ? 'Choose Screenshot' : 'Screenshot selected'),
+                label: Text(screenshot == null ? context.tr('choose_screenshot') : context.tr('screenshot_selected')),
               ),
               const SizedBox(height: 16),
-              GradientButton(label: 'Submit for Approval', loading: submitting, onPressed: _submit),
+              GradientButton(label: context.tr('submit_for_approval'), loading: submitting, onPressed: _submit),
             ],
           ],
         ),

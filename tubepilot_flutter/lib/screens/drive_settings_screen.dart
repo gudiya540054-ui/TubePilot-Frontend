@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../services/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../providers/language_provider.dart';
 import 'drive_folder_picker_screen.dart';
 
 // Manage an already-connected Google Drive: view account, change the
@@ -43,6 +44,15 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     }
   }
 
+  // ⚠️ FIX: this call previously only passed `dailyUploadTime`, which was
+  // fine on this end — but api_service.dart's OLD updateDriveSettings()
+  // always attached `folderId`/`folderName` to the request body as `null`
+  // even when not passed in, and the backend read that explicit `null` as
+  // "clear the folder". That silently wiped the user's selected folder
+  // every time they only meant to change the time. Fixed at the
+  // api_service.dart layer (folderId/folderName are now omitted entirely
+  // unless the caller means to touch them) — no change needed here, but
+  // kept as a single, explicit call so the intent stays obvious.
   Future<void> _pickTime() async {
     final picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
     if (picked == null || !mounted) return;
@@ -50,7 +60,7 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     try {
       await ApiService.instance.updateDriveSettings(dailyUploadTime: formatted);
       if (mounted) {
-        showToast(context, 'Daily upload time set to $formatted', isSuccess: true);
+        showToast(context, context.tr('daily_upload_time_set').replaceAll('%s', formatted), isSuccess: true);
         context.read<AuthProvider>().refreshUser();
         _loadStatus();
       }
@@ -64,15 +74,20 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
       MaterialPageRoute(builder: (_) => const DriveFolderPickerScreen()),
     );
     if (result == null || !mounted) return; // user backed out
+    final isWholeDrive = result.isEmpty;
     try {
       await ApiService.instance.updateDriveSettings(
-        folderId: result.isEmpty ? null : result['id'],
-        folderName: result.isEmpty ? null : result['name'],
+        folderId: isWholeDrive ? null : result['id'],
+        folderName: isWholeDrive ? null : result['name'],
+        // Explicit intent to reset to "Whole Drive" — this is the ONLY
+        // place folderId/folderName should ever be sent as null, so it's
+        // marked explicitly instead of relying on a null value alone.
+        clearFolder: isWholeDrive,
       );
       if (mounted) {
         showToast(
           context,
-          result.isEmpty ? 'Now uploading from your whole Drive' : 'Folder set to "${result['name']}"',
+          isWholeDrive ? context.tr('now_uploading_whole_drive') : context.tr('folder_set_to').replaceAll('%s', result['name'] ?? ''),
           isSuccess: true,
         );
         context.read<AuthProvider>().refreshUser();
@@ -87,11 +102,11 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Disconnect Google Drive?'),
-        content: const Text('Daily auto-upload from Drive will stop until you connect again.'),
+        title: Text(context.tr('disconnect_drive_confirm_title')),
+        content: Text(context.tr('disconnect_drive_confirm_body')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Disconnect', style: TextStyle(color: AppColors.red))),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.tr('disconnect_drive'), style: const TextStyle(color: AppColors.red))),
         ],
       ),
     );
@@ -99,7 +114,7 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     try {
       await ApiService.instance.disconnectDrive();
       if (mounted) {
-        showToast(context, 'Google Drive disconnected', isSuccess: true);
+        showToast(context, context.tr('google_drive_disconnected'), isSuccess: true);
         context.read<AuthProvider>().refreshUser();
         Navigator.of(context).pop();
       }
@@ -108,20 +123,16 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     }
   }
 
-  // Uses the same Chrome Custom Tab / SFSafariViewController approach as
-  // profile_screen.dart's _connectYoutube/_connectDrive — fast, shares the
-  // device's Chrome/Google session (account picker shows instantly), and
-  // stays visually inside the app instead of a full external-app switch.
   Future<void> _connectAnotherDrive() async {
     if (_nextConnectCost > 0) {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Connect Another Drive?'),
-          content: Text('Connecting a different Google Drive account costs $_nextConnectCost diamonds. Continue?'),
+          title: Text(context.tr('connect_another_drive_confirm_title')),
+          content: Text(context.tr('connect_another_drive_confirm_body').replaceAll('%d', '$_nextConnectCost')),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Continue ($_nextConnectCost 💎)')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.tr('cancel'))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('${context.tr('continue_btn_lower')} ($_nextConnectCost 💎)')),
           ],
         ),
       );
@@ -152,14 +163,14 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Drive Settings')),
+      appBar: AppBar(title: Text(context.tr('drive_settings_title'))),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _drive == null
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
-                    child: Text('No Google Drive connected', style: TextStyle(color: context.surfaces.textDim)),
+                    child: Text(context.tr('no_drive_connected'), style: TextStyle(color: context.surfaces.textDim)),
                   ),
                 )
               : ListView(
@@ -173,7 +184,7 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(_drive!['displayName'] ?? _drive!['email'] ?? 'Connected', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                            Text(_drive!['displayName'] ?? _drive!['email'] ?? context.tr('connected_fallback'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                             if (_drive!['email'] != null) Text(_drive!['email'], style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
                           ]),
                         ),
@@ -185,16 +196,16 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
                       child: Column(children: [
                         ListTile(
                           leading: const Icon(Icons.folder_rounded, color: AppColors.diamond),
-                          title: const Text('Upload Folder'),
-                          subtitle: Text(_drive!['folderName'] ?? 'Whole Drive'),
+                          title: Text(context.tr('upload_folder')),
+                          subtitle: Text(_drive!['folderName'] ?? context.tr('whole_drive')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: _pickFolder,
                         ),
                         Divider(height: 1, color: context.surfaces.border),
                         ListTile(
                           leading: const Icon(Icons.schedule_rounded, color: AppColors.purple),
-                          title: const Text('Daily Upload Time'),
-                          subtitle: Text(_drive!['dailyUploadTime'] ?? 'Not set'),
+                          title: Text(context.tr('daily_upload_time')),
+                          subtitle: Text(_drive!['dailyUploadTime'] ?? context.tr('not_set')),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: _pickTime,
                         ),
@@ -207,7 +218,7 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
                         onPressed: _connectAnotherDrive,
                         icon: const Icon(Icons.swap_horiz_rounded, color: AppColors.purple, size: 18),
                         label: Text(
-                          _nextConnectCost > 0 ? 'Connect Another Drive ($_nextConnectCost 💎)' : 'Connect Another Drive',
+                          _nextConnectCost > 0 ? '${context.tr('connect_another_drive')} ($_nextConnectCost 💎)' : context.tr('connect_another_drive'),
                           style: const TextStyle(color: AppColors.purple),
                         ),
                         style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.purple)),
@@ -219,7 +230,7 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _disconnect,
                         icon: const Icon(Icons.link_off_rounded, color: AppColors.red, size: 18),
-                        label: const Text('Disconnect Drive', style: TextStyle(color: AppColors.red)),
+                        label: Text(context.tr('disconnect_drive'), style: const TextStyle(color: AppColors.red)),
                         style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.red)),
                       ),
                     ),
