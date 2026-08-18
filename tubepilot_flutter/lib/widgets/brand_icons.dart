@@ -58,20 +58,12 @@ class FacebookIcon extends StatelessWidget {
   }
 }
 
-// Rewritten AGAIN: the previous version tried to build the "f" as one
-// FILLED outline by manually stitching together the outer/inner edges of
-// the stem, crossbar notch, and hook as a single sequence of line/curve
-// points. Getting every one of those edges to line up pixel-perfectly by
-// hand is extremely error-prone — a single wrong coordinate anywhere in
-// that chain produces a lopsided notch or misaligned joint, which is
-// exactly the "broken f" that kept showing up.
-//
-// This version sidesteps that entirely: instead of drawing a filled
-// outline, it draws the "f" the way you'd actually write it — as a
-// STROKED path along the letter's skeleton (stem + hook as one continuous
-// path, crossbar as a second short stroke), using round caps/joins so the
-// strokes blend into each other cleanly with zero manual alignment. This
-// is far more robust and matches the real wordmark's proportions.
+// Stroked-skeleton "f" (see previous rewrite note) — this pass just tunes
+// proportions: the stem is centered a touch more to the left (closer to
+// the real wordmark, which isn't perfectly centered in the circle), the
+// hook curve is rounder and reaches further up, the crossbar sits closer
+// to true middle, and the stroke is slightly thinner so the glyph reads
+// cleanly at small icon sizes instead of looking heavy/blobby.
 class _FacebookPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -83,7 +75,7 @@ class _FacebookPainter extends CustomPainter {
     // Circle background
     canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF1877F2));
 
-    final strokeWidth = w * 0.15;
+    final strokeWidth = w * 0.13;
     final strokePaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
@@ -91,21 +83,22 @@ class _FacebookPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    // Stem + top hook as ONE continuous path — the curve into the hook is
-    // a natural extension of the stem line, so there's no seam/joint to
-    // misalign in the first place.
+    // Stem + top hook as ONE continuous path — no seam to misalign.
+    // Stem sits at x=0.52 (near-center, slightly left) and runs from
+    // just above the bottom to just below the top, then curves into a
+    // rounder hook that reaches up to y=0.18 before turning right.
     final stemAndHook = Path()
-      ..moveTo(w * 0.54, h * 0.80)
-      ..lineTo(w * 0.54, h * 0.30)
-      ..quadraticBezierTo(w * 0.54, h * 0.20, w * 0.64, h * 0.20)
-      ..lineTo(w * 0.70, h * 0.20);
+      ..moveTo(w * 0.52, h * 0.79)
+      ..lineTo(w * 0.52, h * 0.32)
+      ..quadraticBezierTo(w * 0.52, h * 0.18, w * 0.66, h * 0.18)
+      ..lineTo(w * 0.71, h * 0.18);
     canvas.drawPath(stemAndHook, strokePaint);
 
-    // Crossbar — a short horizontal stroke through the stem, just below
-    // its midpoint (matches the real Facebook wordmark's proportions).
+    // Crossbar — short horizontal stroke right through the stem's
+    // midpoint, matching the real wordmark's proportions.
     final crossbar = Path()
-      ..moveTo(w * 0.40, h * 0.52)
-      ..lineTo(w * 0.62, h * 0.52);
+      ..moveTo(w * 0.38, h * 0.50)
+      ..lineTo(w * 0.60, h * 0.50);
     canvas.drawPath(crossbar, strokePaint);
   }
 

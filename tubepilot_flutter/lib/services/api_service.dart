@@ -147,11 +147,6 @@ class ApiService {
   Future<Map<String, dynamic>> applyReferralCode(String referralCode) =>
       _request('/auth/apply-referral', method: 'POST', body: {'referralCode': referralCode});
 
-  /// Self-service account deletion (Google Play account-deletion compliance).
-  /// Permanently deletes the CALLER's own account — backend route is
-  /// DELETE /api/auth/delete-account, which runs the same cascade delete
-  /// (Cloudinary files, Drive disconnect, Video/Transaction/Notification
-  /// docs, User doc) as the admin delete flow. Irreversible.
   Future<Map<String, dynamic>> deleteMyAccount() => _request('/auth/delete-account', method: 'DELETE');
 
   // ---------------- Dashboard ----------------
@@ -167,31 +162,27 @@ class ApiService {
   Future<Map<String, dynamic>> getDriveStatus() => _request('/drive/status');
   Future<Map<String, dynamic>> disconnectDrive() => _request('/drive/disconnect', method: 'DELETE');
 
-  // ⚠️ FIX: previously `folderId`/`folderName` were ALWAYS included in the
-  // request body (even as `null`), regardless of whether the caller passed
-  // them. That meant a call like `updateDriveSettings(dailyUploadTime: t)`
-  // — made from the "change daily upload time" flow, which never touches
-  // folder — silently sent `folderId: null, folderName: null` too. The
-  // backend treats an explicit `null` (as opposed to a missing/undefined
-  // key) as "clear this field", so every time-only update was WIPING the
-  // user's selected folder back to "Whole Drive" without them asking for
-  // it. That's the exact bug behind "folder apne aap change ho jaata hai".
+  // folderId/folderName are only included in the body when the caller
+  // actually intends to change folder scope (clearFolder: true is the
+  // explicit way to reset to "Whole Drive"). A time-only or mode-only
+  // call never touches folder state — see drive_settings_screen.dart.
   //
-  // Fix: only include `folderId`/`folderName` in the body when the caller
-  // is actually intending to change folder scope. `clearFolder: true` is
-  // the explicit, intentional way to reset to "Whole Drive" (used by the
-  // folder picker when the user picks "Use Whole Drive") — a plain
-  // time-only call no longer touches folder state at all.
+  // uploadMode: 'scheduled' (default, fixed 06:00 IST daily pull + go
+  // public at dailyUploadTime) or 'live' (testing mode — checked every
+  // minute, publishes immediately). Omit to leave the current mode
+  // untouched.
   Future<Map<String, dynamic>> updateDriveSettings({
     String? dailyUploadTime,
     String? folderId,
     String? folderName,
     bool clearFolder = false,
+    String? uploadMode,
   }) =>
       _request('/drive/settings', method: 'PATCH', body: {
         if (dailyUploadTime != null) 'dailyUploadTime': dailyUploadTime,
         if (folderId != null || clearFolder) 'folderId': folderId,
         if (folderName != null || clearFolder) 'folderName': folderName,
+        if (uploadMode != null) 'uploadMode': uploadMode,
       });
 
   Future<Map<String, dynamic>> listDriveFolders({String? parentId}) =>
@@ -206,9 +197,6 @@ class ApiService {
   Future<Map<String, dynamic>> disconnectFacebook() => _request('/meta/facebook/disconnect', method: 'DELETE');
 
   // ---------------- Videos (multi-platform) ----------------
-  /// platforms: e.g. ['youtube', 'facebook']
-  /// youtube/facebook: platform-specific metadata maps, only the
-  /// ones present in [platforms] need to be non-null.
   Future<Map<String, dynamic>> uploadVideo({
     required String videoPath,
     String? thumbnailPath,
@@ -304,10 +292,6 @@ class ApiService {
   Future<Map<String, dynamic>> toggleUserActive(String id) =>
       _request('/admin/users/$id/toggle-active', method: 'PATCH');
 
-  /// Admin permanently deleting a DIFFERENT user's account. Backend route
-  /// is DELETE /api/admin/users/:id (adminOnly). For a user deleting their
-  /// OWN account, use deleteMyAccount() above instead — different route,
-  /// different auth requirement.
   Future<Map<String, dynamic>> deleteUserAccount(String id) => _request('/admin/users/$id', method: 'DELETE');
 
   Future<Map<String, dynamic>> updatePaymentSettings({
@@ -337,8 +321,6 @@ class ApiService {
   }
 
   http.MediaType _lookupMimeOrDefault(String path, String fallback) {
-    // Minimal inline lookup so this file doesn't need an extra import beyond
-    // what's already used elsewhere (mime package is used in upload_screen.dart).
     final ext = path.split('.').last.toLowerCase();
     const map = {
       'mp4': 'video/mp4', 'mov': 'video/quicktime', 'mkv': 'video/x-matroska',

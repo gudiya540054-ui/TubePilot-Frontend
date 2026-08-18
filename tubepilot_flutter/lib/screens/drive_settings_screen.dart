@@ -9,8 +9,9 @@ import '../providers/language_provider.dart';
 import 'drive_folder_picker_screen.dart';
 
 // Manage an already-connected Google Drive: view account, change the
-// auto-upload folder, change the daily upload time, disconnect, or connect a
-// DIFFERENT Drive account (2nd+ connect costs diamonds — see
+// auto-upload folder, change the daily upload time, switch between
+// Scheduled (06:00 IST) / Live (instant test) upload mode, disconnect, or
+// connect a DIFFERENT Drive account (2nd+ connect costs diamonds — see
 // backend routes/drive.js -> DRIVE_RECONNECT_DIAMOND_COST).
 class DriveSettingsScreen extends StatefulWidget {
   const DriveSettingsScreen({super.key});
@@ -22,12 +23,17 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
   Map<String, dynamic>? _drive;
   int _nextConnectCost = 0;
   bool _loading = true;
+  bool _updatingMode = false;
 
   @override
   void initState() {
     super.initState();
     _loadStatus();
   }
+
+  // 'scheduled' or 'live' — defaults to 'scheduled' (fixed 06:00 IST) if
+  // the backend hasn't sent a value yet (older accounts / not-yet-migrated).
+  String get _uploadMode => (_drive?['uploadMode'] as String?) ?? 'scheduled';
 
   Future<void> _loadStatus() async {
     setState(() => _loading = true);
@@ -44,17 +50,16 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     }
   }
 
-  // ⚠️ FIX: this call previously only passed `dailyUploadTime`, which was
-  // fine on this end — but api_service.dart's OLD updateDriveSettings()
-  // always attached `folderId`/`folderName` to the request body as `null`
-  // even when not passed in, and the backend read that explicit `null` as
-  // "clear the folder". That silently wiped the user's selected folder
-  // every time they only meant to change the time. Fixed at the
-  // api_service.dart layer (folderId/folderName are now omitted entirely
-  // unless the caller means to touch them) — no change needed here, but
-  // kept as a single, explicit call so the intent stays obvious.
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    final current = _drive?['dailyUploadTime'] as String?;
+    TimeOfDay initial = TimeOfDay.now();
+    if (current != null && current.contains(':')) {
+      final parts = current.split(':');
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h != null && m != null) initial = TimeOfDay(hour: h, minute: m);
+    }
+    final picked = await showTimePicker(context: context, initialTime: initial);
     if (picked == null || !mounted) return;
     final formatted = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
     try {
@@ -69,6 +74,29 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     }
   }
 
+  Future<void> _setUploadMode(String mode) async {
+    if (mode == _uploadMode || _updatingMode) return;
+    setState(() => _updatingMode = true);
+    try {
+      await ApiService.instance.updateDriveSettings(uploadMode: mode);
+      if (mounted) {
+        showToast(
+          context,
+          mode == 'live'
+              ? 'Live Upload ON — checking your Drive right now, watch server logs.'
+              : '6:00 Upload mode — daily auto-upload restored.',
+          isSuccess: true,
+        );
+        context.read<AuthProvider>().refreshUser();
+        _loadStatus();
+      }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
+    } finally {
+      if (mounted) setState(() => _updatingMode = false);
+    }
+  }
+
   Future<void> _pickFolder() async {
     final result = await Navigator.of(context).push<Map<String, String>?>(
       MaterialPageRoute(builder: (_) => const DriveFolderPickerScreen()),
@@ -79,9 +107,6 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
       await ApiService.instance.updateDriveSettings(
         folderId: isWholeDrive ? null : result['id'],
         folderName: isWholeDrive ? null : result['name'],
-        // Explicit intent to reset to "Whole Drive" — this is the ONLY
-        // place folderId/folderName should ever be sent as null, so it's
-        // marked explicitly instead of relying on a null value alone.
         clearFolder: isWholeDrive,
       );
       if (mounted) {
@@ -191,26 +216,106 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
                       ]),
                     ),
                     const SizedBox(height: 16),
+
+                    // ---------------- Folder ----------------
                     Container(
                       decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(16)),
-                      child: Column(children: [
-                        ListTile(
-                          leading: const Icon(Icons.folder_rounded, color: AppColors.diamond),
-                          title: Text(context.tr('upload_folder')),
-                          subtitle: Text(_drive!['folderName'] ?? context.tr('whole_drive')),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: _pickFolder,
-                        ),
-                        Divider(height: 1, color: context.surfaces.border),
-                        ListTile(
-                          leading: const Icon(Icons.schedule_rounded, color: AppColors.purple),
-                          title: Text(context.tr('daily_upload_time')),
-                          subtitle: Text(_drive!['dailyUploadTime'] ?? context.tr('not_set')),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: _pickTime,
-                        ),
-                      ]),
+                      child: ListTile(
+                        leading: const Icon(Icons.folder_rounded, color: AppColors.diamond),
+                        title: Text(context.tr('upload_folder')),
+                        subtitle: Text(_drive!['folderName'] ?? context.tr('whole_drive')),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _pickFolder,
+                      ),
                     ),
+                    const SizedBox(height: 16),
+
+                    // ---------------- Digital-clock style time display ----------------
+                    Text(context.tr('daily_upload_time'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: _pickTime,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 22),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF14181F),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: AppColors.purple.withOpacity(0.35), width: 1.2),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              _drive!['dailyUploadTime'] ?? '--:--',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 44,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'monospace',
+                                letterSpacing: 4,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.edit_rounded, size: 13, color: Colors.white.withOpacity(0.55)),
+                                const SizedBox(width: 5),
+                                Text(
+                                  _drive!['dailyUploadTime'] == null ? context.tr('not_set') : 'Tap to change',
+                                  style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ---------------- Upload mode toggle: 6:00 Upload / Live Upload ----------------
+                    // Default is ALWAYS "6:00 Upload" (scheduled — fixed 06:00 IST
+                    // daily pull, goes public at Daily Upload Time above). Switching
+                    // to "Live Upload" is a TEST mode: the backend checks this
+                    // account every minute and publishes any new Drive video
+                    // immediately (no 06:00 wait, no unlisted staging) — use it to
+                    // verify the pipeline without waiting for the real daily trigger.
+                    Container(
+                      decoration: BoxDecoration(
+                        color: context.surfaces.card2,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.all(5),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _modeButton(
+                              context,
+                              label: '🕕  6:00 Upload',
+                              selected: _uploadMode != 'live',
+                              onTap: () => _setUploadMode('scheduled'),
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: _modeButton(
+                              context,
+                              label: '⚡  Live Upload',
+                              selected: _uploadMode == 'live',
+                              onTap: () => _setUploadMode('live'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _uploadMode == 'live'
+                          ? 'Testing mode — checks your Drive every minute and uploads any new video immediately (published right away, no waiting).'
+                          : 'Default mode — pulls from Drive at 06:00 IST daily, uploads unlisted, then goes public at the time above.',
+                      style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5),
+                    ),
+
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
@@ -236,6 +341,31 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
                     ),
                   ],
                 ),
+    );
+  }
+
+  Widget _modeButton(BuildContext context, {required String label, required bool selected, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: _updatingMode ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.purple : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: _updatingMode && selected
+            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.white : context.surfaces.textDim,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+      ),
     );
   }
 }
