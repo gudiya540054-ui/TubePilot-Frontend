@@ -23,7 +23,6 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
   Map<String, dynamic>? _drive;
   int _nextConnectCost = 0;
   bool _loading = true;
-  bool _updatingMode = false;
 
   @override
   void initState() {
@@ -50,20 +49,38 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
     }
   }
 
+  // Opens the digital wheel time picker (hour/minute scroll columns) with a
+  // small upload-mode dropdown built in. Saves BOTH the time and the mode
+  // together when the user taps OK.
   Future<void> _pickTime() async {
     final current = _drive?['dailyUploadTime'] as String?;
-    TimeOfDay initial = TimeOfDay.now();
+    int initialHour = TimeOfDay.now().hour;
+    int initialMinute = TimeOfDay.now().minute;
     if (current != null && current.contains(':')) {
       final parts = current.split(':');
       final h = int.tryParse(parts[0]);
       final m = int.tryParse(parts[1]);
-      if (h != null && m != null) initial = TimeOfDay(hour: h, minute: m);
+      if (h != null) initialHour = h;
+      if (m != null) initialMinute = m;
     }
-    final picked = await showTimePicker(context: context, initialTime: initial);
-    if (picked == null || !mounted) return;
-    final formatted = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => _DigitalTimePickerDialog(
+        initialHour: initialHour,
+        initialMinute: initialMinute,
+        initialMode: _uploadMode == 'live' ? 'live' : 'scheduled',
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    final hour = result['hour'] as int;
+    final minute = result['minute'] as int;
+    final mode = result['mode'] as String;
+    final formatted = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+
     try {
-      await ApiService.instance.updateDriveSettings(dailyUploadTime: formatted);
+      await ApiService.instance.updateDriveSettings(dailyUploadTime: formatted, uploadMode: mode);
       if (mounted) {
         showToast(context, context.tr('daily_upload_time_set').replaceAll('%s', formatted), isSuccess: true);
         context.read<AuthProvider>().refreshUser();
@@ -71,29 +88,6 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
       }
     } catch (e) {
       if (mounted) showApiError(context, e);
-    }
-  }
-
-  Future<void> _setUploadMode(String mode) async {
-    if (mode == _uploadMode || _updatingMode) return;
-    setState(() => _updatingMode = true);
-    try {
-      await ApiService.instance.updateDriveSettings(uploadMode: mode);
-      if (mounted) {
-        showToast(
-          context,
-          mode == 'live'
-              ? 'Live Upload ON — checking your Drive right now, watch server logs.'
-              : '6:00 Upload mode — daily auto-upload restored.',
-          isSuccess: true,
-        );
-        context.read<AuthProvider>().refreshUser();
-        _loadStatus();
-      }
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => _updatingMode = false);
     }
   }
 
@@ -230,91 +224,46 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ---------------- Digital-clock style time display ----------------
+                    // ---------------- Compact, theme-colored time chip ----------------
+                    // Small tap target (not a big black card) that matches the app's
+                    // purple theme. Opens the digital wheel picker + mode dropdown.
                     Text(context.tr('daily_upload_time'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: _pickTime,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 22),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF14181F),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: AppColors.purple.withOpacity(0.35), width: 1.2),
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              _drive!['dailyUploadTime'] ?? '--:--',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 44,
-                                fontWeight: FontWeight.w800,
-                                fontFamily: 'monospace',
-                                letterSpacing: 4,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.edit_rounded, size: 13, color: Colors.white.withOpacity(0.55)),
-                                const SizedBox(width: 5),
-                                Text(
-                                  _drive!['dailyUploadTime'] == null ? context.tr('not_set') : 'Tap to change',
-                                  style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: GestureDetector(
+                        onTap: _pickTime,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.purple.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.purple.withOpacity(0.35), width: 1.2),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.access_time_rounded, size: 18, color: AppColors.purple),
+                              const SizedBox(width: 8),
+                              Text(
+                                _drive!['dailyUploadTime'] ?? '--:--',
+                                style: const TextStyle(
+                                  color: AppColors.purple,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'monospace',
+                                  letterSpacing: 1,
                                 ),
-                              ],
-                            ),
-                          ],
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(Icons.edit_rounded, size: 14, color: AppColors.purple.withOpacity(0.6)),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 14),
-
-                    // ---------------- Upload mode toggle: 6:00 Upload / Live Upload ----------------
-                    // Default is ALWAYS "6:00 Upload" (scheduled — fixed 06:00 IST
-                    // daily pull, goes public at Daily Upload Time above). Switching
-                    // to "Live Upload" is a TEST mode: the backend checks this
-                    // account every minute and publishes any new Drive video
-                    // immediately (no 06:00 wait, no unlisted staging) — use it to
-                    // verify the pipeline without waiting for the real daily trigger.
-                    Container(
-                      decoration: BoxDecoration(
-                        color: context.surfaces.card2,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      padding: const EdgeInsets.all(5),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _modeButton(
-                              context,
-                              label: '🕕  6:00 Upload',
-                              selected: _uploadMode != 'live',
-                              onTap: () => _setUploadMode('scheduled'),
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: _modeButton(
-                              context,
-                              label: '⚡  Live Upload',
-                              selected: _uploadMode == 'live',
-                              onTap: () => _setUploadMode('live'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _uploadMode == 'live'
-                          ? 'Testing mode — checks your Drive every minute and uploads any new video immediately (published right away, no waiting).'
-                          : 'Default mode — pulls from Drive at 06:00 IST daily, uploads unlisted, then goes public at the time above.',
-                      style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5),
-                    ),
+                    // Upload-mode (6:00 / Live) is chosen inside the time picker
+                    // popup now — see _DigitalTimePickerDialog below.
 
                     const SizedBox(height: 20),
                     SizedBox(
@@ -343,28 +292,197 @@ class _DriveSettingsScreenState extends State<DriveSettingsScreen> {
                 ),
     );
   }
+}
 
-  Widget _modeButton(BuildContext context, {required String label, required bool selected, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: _updatingMode ? null : onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.purple : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        alignment: Alignment.center,
-        child: _updatingMode && selected
-            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-            : Text(
-                label,
+// ---------------- Digital wheel time picker + upload-mode dropdown ----------------
+// Two scrollable number columns (hour 00-23, minute 00-59) — scroll up to
+// increase, scroll down to decrease, no drag-a-clock-hand dial. A small
+// dropdown icon (same footprint as the old keyboard-toggle icon) lets the
+// user pick "6:00 Upload" or "Live Upload" in the same popup. OK saves both
+// the chosen time and the chosen mode together. Defaults to "6:00 Upload"
+// unless the drive is already set to Live.
+class _DigitalTimePickerDialog extends StatefulWidget {
+  final int initialHour;
+  final int initialMinute;
+  final String initialMode; // 'scheduled' or 'live'
+
+  const _DigitalTimePickerDialog({
+    required this.initialHour,
+    required this.initialMinute,
+    required this.initialMode,
+  });
+
+  @override
+  State<_DigitalTimePickerDialog> createState() => _DigitalTimePickerDialogState();
+}
+
+class _DigitalTimePickerDialogState extends State<_DigitalTimePickerDialog> {
+  late int _hour;
+  late int _minute;
+  late String _mode;
+  late FixedExtentScrollController _hourController;
+  late FixedExtentScrollController _minuteController;
+
+  static const double _itemExtent = 44;
+  static const double _wheelHeight = 160;
+
+  @override
+  void initState() {
+    super.initState();
+    _hour = widget.initialHour;
+    _minute = widget.initialMinute;
+    _mode = widget.initialMode;
+    _hourController = FixedExtentScrollController(initialItem: _hour);
+    _minuteController = FixedExtentScrollController(initialItem: _minute);
+  }
+
+  @override
+  void dispose() {
+    _hourController.dispose();
+    _minuteController.dispose();
+    super.dispose();
+  }
+
+  Widget _wheelColumn({
+    required FixedExtentScrollController controller,
+    required int itemCount,
+    required int selectedValue,
+    required ValueChanged<int> onChanged,
+  }) {
+    return SizedBox(
+      width: 70,
+      height: _wheelHeight,
+      child: ListWheelScrollView.useDelegate(
+        controller: controller,
+        itemExtent: _itemExtent,
+        perspective: 0.003,
+        diameterRatio: 1.4,
+        physics: const FixedExtentScrollPhysics(),
+        onSelectedItemChanged: onChanged,
+        childDelegate: ListWheelChildBuilderDelegate(
+          childCount: itemCount,
+          builder: (context, index) {
+            final selected = index == selectedValue;
+            return Center(
+              child: Text(
+                index.toString().padLeft(2, '0'),
                 style: TextStyle(
-                  color: selected ? Colors.white : context.surfaces.textDim,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  fontSize: 13,
+                  fontSize: selected ? 30 : 19,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  color: selected ? AppColors.purple : Colors.grey.withOpacity(0.45),
+                  fontFamily: 'monospace',
                 ),
               ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              context.tr('select_time'),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.surfaces.textDim),
+            ),
+            const SizedBox(height: 14),
+
+            // ---- Digital scroll wheels ----
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  height: _itemExtent,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.purple.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _wheelColumn(
+                      controller: _hourController,
+                      itemCount: 24,
+                      selectedValue: _hour,
+                      onChanged: (v) => setState(() => _hour = v),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(':', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+                    ),
+                    _wheelColumn(
+                      controller: _minuteController,
+                      itemCount: 60,
+                      selectedValue: _minute,
+                      onChanged: (v) => setState(() => _minute = v),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 18),
+
+            // ---- Upload-mode dropdown (small, same footprint as old keyboard icon) ----
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _mode == 'live' ? '⚡  Live Upload' : '🕕  6:00 Upload',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.purple),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Upload mode',
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.expand_more_rounded, size: 22, color: AppColors.purple),
+                  onSelected: (v) => setState(() => _mode = v),
+                  itemBuilder: (ctx) => [
+                    CheckedPopupMenuItem<String>(
+                      value: 'scheduled',
+                      checked: _mode == 'scheduled',
+                      child: const Text('🕕  6:00 Upload'),
+                    ),
+                    CheckedPopupMenuItem<String>(
+                      value: 'live',
+                      checked: _mode == 'live',
+                      child: const Text('⚡  Live Upload'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(context.tr('cancel')),
+                ),
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, {
+                    'hour': _hour,
+                    'minute': _minute,
+                    'mode': _mode,
+                  }),
+                  child: const Text('OK', style: TextStyle(color: AppColors.purple, fontWeight: FontWeight.w800)),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

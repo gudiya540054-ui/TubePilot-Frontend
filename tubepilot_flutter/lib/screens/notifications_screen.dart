@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/push_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../providers/language_provider.dart';
@@ -34,6 +35,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
     _load();
+    // ⚠️ FIX (companion to the main.dart / push_service.dart notification
+    // fix): this screen previously only ever refreshed on initial load or
+    // a manual pull-to-refresh. Even once push delivery itself started
+    // working, a notification that arrived while this screen was already
+    // open wouldn't show up until the user thought to swipe down — easy to
+    // mistake for "it still isn't arriving". Now it listens for
+    // PushService's signal and reloads the instant a push comes in.
+    PushService.newNotificationSignal.addListener(_load);
+  }
+
+  @override
+  void dispose() {
+    PushService.newNotificationSignal.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {

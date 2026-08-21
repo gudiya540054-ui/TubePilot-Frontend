@@ -160,6 +160,7 @@ class AppStrings {
     'upload_folder': {'en': 'Upload Folder', 'hi': 'अपलोड फ़ोल्डर', 'hinglish': 'Upload Folder', 'ta': 'பதிவேற்ற கோப்புறை', 'bn': 'আপলোড ফোল্ডার', 'mr': 'अपलोड फोल्डर', 'ur': 'اپلوڈ فولڈر'},
     'whole_drive': {'en': 'Whole Drive', 'hi': 'पूरी ड्राइव', 'hinglish': 'Puri Drive', 'ta': 'முழு Drive', 'bn': 'পুরো ড্রাইভ', 'mr': 'संपूर्ण ड्राइव्ह', 'ur': 'پوری ڈرائیو'},
     'daily_upload_time': {'en': 'Daily Upload Time', 'hi': 'दैनिक अपलोड समय', 'hinglish': 'Daily Upload Time', 'ta': 'தினசரி பதிவேற்ற நேரம்', 'bn': 'দৈনিক আপলোড সময়', 'mr': 'दैनिक अपलोड वेळ', 'ur': 'روزانہ اپلوڈ کا وقت'},
+    'select_time': {'en': 'Select time', 'hi': 'समय चुनें', 'hinglish': 'Time Select karein', 'ta': 'நேரத்தைத் தேர்ந்தெடுக்கவும்', 'bn': 'সময় নির্বাচন করুন', 'mr': 'वेळ निवडा', 'ur': 'وقت منتخب کریں'},
     'not_set': {'en': 'Not set', 'hi': 'सेट नहीं है', 'hinglish': 'Set nahi hai', 'ta': 'அமைக்கப்படவில்லை', 'bn': 'সেট করা নেই', 'mr': 'सेट केलेले नाही', 'ur': 'سیٹ نہیں ہے'},
     'connect_another_drive': {'en': 'Connect Another Drive', 'hi': 'दूसरी ड्राइव कनेक्ट करें', 'hinglish': 'Doosri Drive Connect karein', 'ta': 'மற்றொரு Drive-ஐ இணை', 'bn': 'অন্য ড্রাইভ সংযুক্ত করুন', 'mr': 'दुसरी ड्राइव्ह कनेक्ट करा', 'ur': 'دوسری ڈرائیو منسلک کریں'},
     'disconnect_drive': {'en': 'Disconnect Drive', 'hi': 'ड्राइव डिस्कनेक्ट करें', 'hinglish': 'Drive Disconnect karein', 'ta': 'Drive-ஐ துண்டி', 'bn': 'ড্রাইভ বিচ্ছিন্ন করুন', 'mr': 'ड्राइव्ह डिस्कनेक्ट करा', 'ur': 'ڈرائیو منقطع کریں'},

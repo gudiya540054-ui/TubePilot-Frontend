@@ -229,9 +229,23 @@ class ApiService {
       _request('/videos/$id/schedule/$platform', method: 'PATCH', body: {'scheduledAt': scheduledAt});
   Future<Map<String, dynamic>> cancelVideo(String id) => _request('/videos/$id', method: 'DELETE');
 
-  // ---------------- Diamonds ----------------
+  // ---------------- Diamonds (Cashfree) ----------------
+  // The old manual UPI/QR + screenshot + UTR flow (getPaymentSettings +
+  // POST /diamonds/purchase-request) is fully removed. Replaced by:
+  //   1. createCashfreeOrder() — backend creates a Cashfree order, returns
+  //      a paymentSessionId for the Cashfree Flutter SDK to open checkout.
+  //   2. verifyCashfreePayment() — called after the SDK checkout closes
+  //      (success OR failure/cancel); backend re-confirms directly with
+  //      Cashfree's server before crediting diamonds — never trust the
+  //      SDK's client-side result alone.
   Future<Map<String, dynamic>> getDiamondPackages() => _request('/diamonds/packages');
-  Future<Map<String, dynamic>> getPaymentSettings() => _request('/diamonds/payment-settings');
+
+  Future<Map<String, dynamic>> createCashfreeOrder(int diamondPackage) =>
+      _request('/diamonds/create-order', method: 'POST', body: {'diamondPackage': diamondPackage});
+
+  Future<Map<String, dynamic>> verifyCashfreePayment(String orderId) =>
+      _request('/diamonds/verify-payment', method: 'POST', body: {'orderId': orderId});
+
   Future<Map<String, dynamic>> myPurchaseRequests() => _request('/diamonds/my-requests');
 
   // ---------------- Wallet ----------------

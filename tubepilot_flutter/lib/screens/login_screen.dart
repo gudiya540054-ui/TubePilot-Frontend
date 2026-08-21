@@ -121,18 +121,20 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 children: [
                   const SizedBox(height: 10),
-                  // App logo — transparent PNG from assets, sized to sit
-                  // comfortably inside the rounded gradient badge (no
-                  // stretching/overflow like the old mock emoji placeholder).
-                  Container(
-                    width: 64,
-                    height: 64,
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(gradient: AppColors.gradient, borderRadius: BorderRadius.circular(18)),
+                  // ⚠️ FIX: was wrapped in a Container with
+                  // `decoration: BoxDecoration(gradient: AppColors.gradient, ...)`
+                  // — that gradient box is what was showing as a solid
+                  // background behind the logo. splash.png is already a
+                  // transparent PNG, so removing the decorated container
+                  // entirely (keeping only size) lets it sit directly on
+                  // the screen background with no color behind it.
+                  SizedBox(
+                    width: 84,
+                    height: 84,
                     child: Image.asset(
                       'assets/splash.png',
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+                      errorBuilder: (_, __, ___) => Icon(Icons.play_arrow_rounded, color: AppColors.purple, size: 40),
                     ),
                   ),
                   const SizedBox(height: 20),

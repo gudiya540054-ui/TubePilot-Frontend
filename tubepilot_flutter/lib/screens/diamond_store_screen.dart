@@ -1,14 +1,23 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-import 'package:mime/mime.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cferrorresponse/cferrorresponse.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfpaymentgateway/cfpaymentgatewayservice.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfsession/cfsession.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfdropcheckoutpayment.dart';
+import 'package:flutter_cashfree_pg_sdk/utils/cfenums.dart';
+import 'package:flutter_cashfree_pg_sdk/utils/cfexceptions.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../providers/language_provider.dart';
 
+// ⚠️ FIX: previous version imported from `package:cashfree_pg/...` and
+// declared `implements CFCallback` — neither is correct. The package that
+// actually exposes CFPaymentGatewayService / CFSessionBuilder /
+// CFDropCheckoutPaymentBuilder is `flutter_cashfree_pg_sdk` (see
+// pubspec.yaml), and its own official examples never implement a
+// CFCallback interface — setCallback() just takes two plain function
+// references matching (String orderId) and (CFErrorResponse, String
+// orderId). cfenums/cfexceptions also live under utils/, not api/.
 class DiamondStoreScreen extends StatefulWidget {
   const DiamondStoreScreen({super.key});
   @override
@@ -18,13 +27,15 @@ class DiamondStoreScreen extends StatefulWidget {
 class _DiamondStoreScreenState extends State<DiamondStoreScreen> {
   List<dynamic> packages = [];
   int balance = 0;
-  String userId = '';
-  Map<String, dynamic>? paymentSettings;
   bool loading = true;
+  int? _payingDiamonds;
+
+  final CFPaymentGatewayService _cfPaymentGatewayService = CFPaymentGatewayService();
 
   @override
   void initState() {
     super.initState();
+    _cfPaymentGatewayService.setCallback(_onVerify, _onError);
     _load();
   }
 
@@ -32,11 +43,9 @@ class _DiamondStoreScreenState extends State<DiamondStoreScreen> {
     setState(() => loading = true);
     try {
       final pkgRes = await ApiService.instance.getDiamondPackages();
-      final meRes = await ApiService.instance.me();
       setState(() {
         packages = pkgRes['packages'];
         balance = pkgRes['currentBalance'] ?? 0;
-        userId = meRes['user']['userId'] ?? '';
       });
     } catch (e) {
       if (mounted) showApiError(context, e);
@@ -45,21 +54,83 @@ class _DiamondStoreScreenState extends State<DiamondStoreScreen> {
     }
   }
 
-  Future<void> _selectPackage(int diamonds, int price) async {
+  Future<void> _buy(int diamonds) async {
+    if (_payingDiamonds != null) return;
+    setState(() => _payingDiamonds = diamonds);
     try {
-      paymentSettings ??= (await ApiService.instance.getPaymentSettings())['settings'];
+      final res = await ApiService.instance.createCashfreeOrder(diamonds);
+      final orderId = res['orderId'] as String;
+      final paymentSessionId = res['paymentSessionId'] as String;
+
+      // Session/payment object construction can throw CFException if a
+      // required field is missing/invalid — caught here so a malformed
+      // order response shows a normal error toast instead of crashing.
+      try {
+        final session = CFSessionBuilder()
+            // TODO: switch to CFEnvironment.PRODUCTION for release builds —
+            // must match CASHFREE_ENV on the backend, or checkout will fail
+            // with an "invalid session" style error.
+            .setEnvironment(CFEnvironment.SANDBOX)
+            .setOrderId(orderId)
+            .setPaymentSessionId(paymentSessionId)
+            .build();
+
+        final cfDropCheckoutPayment = CFDropCheckoutPaymentBuilder()
+            .setSession(session)
+            .build();
+
+        _cfPaymentGatewayService.doPayment(cfDropCheckoutPayment);
+        // Execution continues in _onVerify()/_onError() below once the
+        // checkout screen closes — NOT here, doPayment() doesn't await.
+      } on CFException catch (e) {
+        if (mounted) {
+          setState(() => _payingDiamonds = null);
+          showToast(context, e.message ?? 'Could not open checkout.', isError: true);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _payingDiamonds = null);
+        showApiError(context, e);
+      }
+    }
+  }
+
+  // Fired by the Cashfree SDK once checkout closes with what looks like a
+  // successful payment. This is still just a client-side signal — the
+  // actual credit only happens after our backend re-confirms directly with
+  // Cashfree's server (see verify-payment route notes).
+  void _onVerify(String orderId) {
+    _confirmWithBackend(orderId);
+  }
+
+  // Fired on failure/cancel. Still asks the backend to check — a failure
+  // callback can occasionally fire even when the payment actually
+  // succeeded on Cashfree's side (e.g. the user backgrounded the app right
+  // at the end of checkout), so this is not treated as automatic proof of
+  // failure either.
+  void _onError(CFErrorResponse errorResponse, String orderId) {
+    _confirmWithBackend(orderId, sdkReportedError: errorResponse.getMessage());
+  }
+
+  Future<void> _confirmWithBackend(String orderId, {String? sdkReportedError}) async {
+    try {
+      final res = await ApiService.instance.verifyCashfreePayment(orderId);
+      final status = res['status'];
+      if (!mounted) return;
+      if (status == 'approved') {
+        showToast(context, context.tr('payment_submitted_msg'), isSuccess: true);
+        _load();
+      } else if (status == 'pending') {
+        showToast(context, 'Payment is still processing — check back shortly.', isError: false);
+      } else {
+        showToast(context, sdkReportedError ?? 'Payment was not completed.', isError: true);
+      }
     } catch (e) {
       if (mounted) showApiError(context, e);
-      return;
+    } finally {
+      if (mounted) setState(() => _payingDiamonds = null);
     }
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-      builder: (_) => _PaymentSheet(diamonds: diamonds, price: price, settings: paymentSettings!, userId: userId, onDone: _load),
-    );
   }
 
   @override
@@ -82,135 +153,40 @@ class _DiamondStoreScreenState extends State<DiamondStoreScreen> {
                 const SizedBox(height: 20),
                 Text(context.tr('choose_package'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
-                ...packages.map((p) => Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(14)),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(children: [
-                            const Text('💎', style: TextStyle(fontSize: 24)),
-                            const SizedBox(width: 10),
-                            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(context.tr('diamonds_suffix').replaceAll('%d', '${p['diamonds']}'), style: const TextStyle(fontWeight: FontWeight.w700)),
-                              Text('₹${p['priceINR']}', style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5)),
-                            ]),
+                ...packages.map((p) {
+                  final diamonds = p['diamonds'] as int;
+                  final isPaying = _payingDiamonds == diamonds;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(border: Border.all(color: context.surfaces.border), borderRadius: BorderRadius.circular(14)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(children: [
+                          const Text('💎', style: TextStyle(fontSize: 24)),
+                          const SizedBox(width: 10),
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(context.tr('diamonds_suffix').replaceAll('%d', '$diamonds'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                            Text('₹${p['priceINR']}', style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5)),
                           ]),
-                          ElevatedButton(onPressed: () => _selectPackage(p['diamonds'], p['priceINR']), child: Text(context.tr('buy_btn'))),
-                        ],
-                      ),
-                    )),
+                        ]),
+                        ElevatedButton(
+                          onPressed: _payingDiamonds != null ? null : () => _buy(diamonds),
+                          child: isPaying
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : Text(context.tr('buy_btn')),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
               ],
             ),
-    );
-  }
-}
-
-class _PaymentSheet extends StatefulWidget {
-  final int diamonds;
-  final int price;
-  final Map<String, dynamic> settings;
-  final String userId;
-  final VoidCallback onDone;
-  const _PaymentSheet({required this.diamonds, required this.price, required this.settings, required this.userId, required this.onDone});
-
-  @override
-  State<_PaymentSheet> createState() => _PaymentSheetState();
-}
-
-class _PaymentSheetState extends State<_PaymentSheet> {
-  bool showConfirmForm = false;
-  final _utrCtrl = TextEditingController();
-  File? screenshot;
-  bool submitting = false;
-
-  Future<void> _pickScreenshot() async {
-    final picker = ImagePicker();
-    final img = await picker.pickImage(source: ImageSource.gallery);
-    if (img != null) setState(() => screenshot = File(img.path));
-  }
-
-  Future<void> _submit() async {
-    if (_utrCtrl.text.trim().isEmpty) {
-      showToast(context, context.tr('enter_utr_error'), isError: true);
-      return;
-    }
-    setState(() => submitting = true);
-    try {
-      final files = <http.MultipartFile>[];
-      if (screenshot != null) {
-        final mime = lookupMimeType(screenshot!.path) ?? 'image/jpeg';
-        files.add(await http.MultipartFile.fromPath('screenshot', screenshot!.path, contentType: MediaType.parse(mime)));
-      }
-      await ApiService.instance.uploadMultipart('/diamonds/purchase-request',
-          fields: {'diamondPackage': '${widget.diamonds}', 'utrNumber': _utrCtrl.text.trim()}, files: files);
-      if (!mounted) return;
-      showToast(context, context.tr('payment_submitted_msg'), isSuccess: true);
-      Navigator.pop(context);
-      widget.onDone();
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => submitting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final qr = widget.settings['qrImageUrl'];
-    return Padding(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(context).viewInsets.bottom + 20),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text(context.tr('complete_payment'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-            ]),
-            Center(
-              child: Column(children: [
-                if (qr != null && qr != '')
-                  ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(qr, width: 180, height: 180, fit: BoxFit.cover))
-                else
-                  Text(context.tr('qr_not_set'), style: TextStyle(color: context.surfaces.textDim)),
-                const SizedBox(height: 10),
-                Text(widget.settings['upiId'] ?? context.tr('upi_not_configured'), style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text(widget.settings['merchantName'] ?? '', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
-                const SizedBox(height: 10),
-                Text(context.tr('pay_amount').replaceAll('%d', '${widget.price}'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-              ]),
-            ),
-            const SizedBox(height: 20),
-            if (!showConfirmForm)
-              GradientButton(label: context.tr('payment_done'), onPressed: () => setState(() => showConfirmForm = true))
-            else ...[
-              Text(context.tr('amount_paid_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
-              const SizedBox(height: 6),
-              TextField(enabled: false, controller: TextEditingController(text: '${widget.price}')),
-              const SizedBox(height: 12),
-              Text(context.tr('utr_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
-              const SizedBox(height: 6),
-              TextField(controller: _utrCtrl, decoration: const InputDecoration(hintText: 'e.g. 402812345678')),
-              const SizedBox(height: 12),
-              Text(context.tr('user_id_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
-              const SizedBox(height: 6),
-              TextField(enabled: false, controller: TextEditingController(text: widget.userId)),
-              const SizedBox(height: 12),
-              Text(context.tr('screenshot_optional_label'), style: TextStyle(color: context.surfaces.textDim, fontSize: 13)),
-              const SizedBox(height: 6),
-              OutlinedButton.icon(
-                onPressed: _pickScreenshot,
-                icon: const Icon(Icons.image_outlined, size: 18),
-                label: Text(screenshot == null ? context.tr('choose_screenshot') : context.tr('screenshot_selected')),
-              ),
-              const SizedBox(height: 16),
-              GradientButton(label: context.tr('submit_for_approval'), loading: submitting, onPressed: _submit),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

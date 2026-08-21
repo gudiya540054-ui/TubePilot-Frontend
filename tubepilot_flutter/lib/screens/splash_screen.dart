@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/auth_provider.dart';
 import '../services/storage_service.dart';
 import '../services/push_service.dart';
@@ -36,7 +37,29 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
     _ringController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
 
+    // ⚠️ ADD: Photos/Videos permission prompt — previously the app only
+    // ever triggered this reactively, the first time a user tapped
+    // "choose file" on the Upload screen. That's why it never showed up
+    // here on the splash screen the way the notification permission does
+    // (PushService.initAfterLogin(), called below in _decideNextScreen()).
+    // Requesting it here, during the same 7s splash window, gives both
+    // system permission dialogs the same upfront treatment.
+    _requestMediaPermissions();
+
     _decideNextScreen();
+  }
+
+  Future<void> _requestMediaPermissions() async {
+    try {
+      // Permission.photos / Permission.videos map to READ_MEDIA_IMAGES /
+      // READ_MEDIA_VIDEO on Android 13+ (API 33+) and to the legacy
+      // READ_EXTERNAL_STORAGE permission automatically on older Android
+      // versions — matches exactly what's declared in AndroidManifest.xml.
+      await [Permission.photos, Permission.videos].request();
+    } catch (_) {
+      // Non-fatal — image_picker will still prompt reactively later if
+      // this fails to fire for any reason (e.g. platform not supported).
+    }
   }
 
   @override

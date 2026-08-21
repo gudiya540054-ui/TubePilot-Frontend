@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
@@ -16,13 +14,16 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   Map<String, dynamic>? stats;
   bool loading = true;
   final paymentTabs = const ['pending', 'approved', 'rejected'];
-  final tabLabels = const ['Pending', 'Approved', 'Rejected', 'Users', 'Settings'];
+  // ⚠️ CHANGE: "Settings" tab (manual UPI ID / QR code management) removed
+  // entirely — since diamond purchases now go through Cashfree's in-app
+  // checkout SDK (see diamond_store_screen.dart + backend routes/diamond.js),
+  // there is no more UPI ID or QR code for admins to configure. Down to 4 tabs.
+  final tabLabels = const ['Pending', 'Approved', 'Rejected', 'Users'];
   final tabIcons = const [
     Icons.hourglass_top_rounded,
     Icons.check_circle_outline_rounded,
     Icons.cancel_outlined,
     Icons.people_alt_outlined,
-    Icons.settings_outlined,
   ];
 
   // Per-status cache so tabs never show each other's stale data and each
@@ -47,8 +48,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       if (_tabController.indexIsChanging) return;
       if (tabLabels[_tabController.index] == 'Users') {
         _loadUsers();
-      } else if (tabLabels[_tabController.index] == 'Settings') {
-        _loadSettings();
       }
       setState(() {});
     });
@@ -59,9 +58,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   void dispose() {
     _tabController.dispose();
     _searchCtrl.dispose();
-    _upiCtrl.dispose();
-    _accNameCtrl.dispose();
-    _merchantCtrl.dispose();
     super.dispose();
   }
 
@@ -97,6 +93,14 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   void _invalidatePayments() => paymentsLoadedStatuses.clear();
 
+  // ⚠️ NOTE: with Cashfree, payments normally auto-approve themselves the
+  // moment the backend confirms order_status === 'PAID' (see routes/diamond.js
+  // verify-payment / webhook) — a transaction only sits here as 'pending'
+  // if the user abandoned checkout or closed the app before either of
+  // those could run. This manual Approve button still works (it force-
+  // credits diamonds directly), but should only be used if you've
+  // independently confirmed the payment actually went through — it does
+  // NOT re-check anything with Cashfree itself.
   Future<void> _approve(String id) async {
     try {
       await ApiService.instance.approvePayment(id);
@@ -262,56 +266,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     }
   }
 
-  // ---------------- Settings tab ----------------
-  bool settingsLoading = false;
-  bool settingsSaving = false;
-  final _upiCtrl = TextEditingController();
-  final _accNameCtrl = TextEditingController();
-  final _merchantCtrl = TextEditingController();
-  String? currentQrUrl;
-  File? newQrImage;
-
-  Future<void> _loadSettings() async {
-    setState(() => settingsLoading = true);
-    try {
-      final res = await ApiService.instance.getAdminPaymentSettings();
-      final s = res['settings'] ?? {};
-      _upiCtrl.text = s['upiId'] ?? '';
-      _accNameCtrl.text = s['accountName'] ?? '';
-      _merchantCtrl.text = s['merchantName'] ?? '';
-      currentQrUrl = s['qrImageUrl'];
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => settingsLoading = false);
-    }
-  }
-
-  Future<void> _pickQrImage() async {
-    final picker = ImagePicker();
-    final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
-    if (img != null) setState(() => newQrImage = File(img.path));
-  }
-
-  Future<void> _saveSettings() async {
-    setState(() => settingsSaving = true);
-    try {
-      await ApiService.instance.updatePaymentSettings(
-        upiId: _upiCtrl.text.trim(),
-        accountName: _accNameCtrl.text.trim(),
-        merchantName: _merchantCtrl.text.trim(),
-        qrImagePath: newQrImage?.path,
-      );
-      if (mounted) showToast(context, 'Payment settings updated', isSuccess: true);
-      newQrImage = null;
-      _loadSettings();
-    } catch (e) {
-      if (mounted) showApiError(context, e);
-    } finally {
-      if (mounted) setState(() => settingsSaving = false);
-    }
-  }
-
   (Color, String) _statusBadge(String status) {
     switch (status) {
       case 'approved': return (AppColors.green, 'approved');
@@ -391,7 +345,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 _buildPaymentsList('approved'),
                 _buildPaymentsList('rejected'),
                 _buildUsersTab(),
-                _buildSettingsTab(),
               ],
             ),
     );
@@ -470,6 +423,17 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 ),
             ],
           ),
+          // Cashfree auto-confirms and auto-credits payments itself (see
+          // routes/diamond.js verify-payment / webhook) — a transaction only
+          // ends up sitting here as 'pending' if the user abandoned
+          // checkout or closed the app before either could run.
+          if (status == 'pending') ...[
+            const SizedBox(height: 4),
+            Text(
+              'Cashfree auto-confirms payments — these are stuck/abandoned orders only. Approve here only if you\'ve verified the payment yourself.',
+              style: TextStyle(color: context.surfaces.textDim, fontSize: 11),
+            ),
+          ],
           const SizedBox(height: 10),
           if (isLoading && list.isEmpty)
             const Padding(
@@ -490,6 +454,13 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
 
   Widget _paymentCard(dynamic t, String status) {
     final (badgeColor, badgeLabel) = _statusBadge(status);
+    final cashfreeOrderId = t['cashfreeOrderId'];
+    // Cashfree transactions show their Order ID; any older transaction
+    // from before the Cashfree migration falls back to its UTR number.
+    final referenceLabel = (cashfreeOrderId != null && cashfreeOrderId.toString().isNotEmpty)
+        ? 'Order ${cashfreeOrderId}'
+        : 'UTR ${t['utrNumber'] ?? '-'}';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -553,7 +524,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 Icon(Icons.receipt_long_outlined, size: 13, color: context.surfaces.textDim),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text('UTR ${t['utrNumber'] ?? '-'}', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5), overflow: TextOverflow.ellipsis),
+                  child: Text(referenceLabel, style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5), overflow: TextOverflow.ellipsis),
                 ),
                 Icon(Icons.schedule, size: 13, color: context.surfaces.textDim),
                 const SizedBox(width: 4),
@@ -774,91 +745,5 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         ],
       ),
     );
-  }
-
-  Widget _settingsField(String label, TextEditingController ctrl, String hint, IconData icon) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(color: context.surfaces.textDim, fontSize: 12.5, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: context.surfaces.card2,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: context.surfaces.border),
-          ),
-          child: TextField(
-            controller: ctrl,
-            decoration: InputDecoration(
-              hintText: hint,
-              prefixIcon: Icon(icon, size: 18, color: context.surfaces.textDim),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsTab() {
-    if (_upiCtrl.text.isEmpty && !settingsLoading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadSettings());
-    }
-    return settingsLoading
-        ? const LoadingView()
-        : ListView(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-            children: [
-              const Text('Payment Settings', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 4),
-              Text('Shown to every user in the Diamond Store payment screen.', style: TextStyle(color: context.surfaces.textDim, fontSize: 12)),
-              const SizedBox(height: 20),
-
-              Center(
-                child: GestureDetector(
-                  onTap: _pickQrImage,
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 150, height: 150,
-                        decoration: BoxDecoration(
-                          color: context.surfaces.card2,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: context.surfaces.border, width: 1.5),
-                        ),
-                        child: newQrImage != null
-                            ? ClipRRect(borderRadius: BorderRadius.circular(19), child: Image.file(newQrImage!, fit: BoxFit.cover))
-                            : (currentQrUrl != null && currentQrUrl!.isNotEmpty)
-                                ? ClipRRect(borderRadius: BorderRadius.circular(19), child: Image.network(currentQrUrl!, fit: BoxFit.cover))
-                                : Center(child: Icon(Icons.qr_code_2, size: 44, color: context.surfaces.textDim)),
-                      ),
-                      Positioned(
-                        right: 4, bottom: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: const BoxDecoration(color: AppColors.purple, shape: BoxShape.circle),
-                          child: const Icon(Icons.edit, size: 14, color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(child: Text('Tap to change QR code', style: TextStyle(color: context.surfaces.textDim, fontSize: 11.5))),
-              const SizedBox(height: 24),
-
-              _settingsField('UPI ID', _upiCtrl, 'tubepilot@upi', Icons.account_balance_wallet_outlined),
-              const SizedBox(height: 16),
-              _settingsField('Account Name', _accNameCtrl, 'Tube Pilot', Icons.badge_outlined),
-              const SizedBox(height: 16),
-              _settingsField('Merchant Name', _merchantCtrl, 'Tube Pilot', Icons.storefront_outlined),
-              const SizedBox(height: 24),
-
-              GradientButton(label: 'Save Settings', loading: settingsSaving, onPressed: _saveSettings),
-            ],
-          );
   }
 }

@@ -8,6 +8,7 @@ import 'providers/theme_provider.dart';
 import 'providers/language_provider.dart';
 import 'services/auth_provider.dart';
 import 'services/api_service.dart';
+import 'services/push_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -51,9 +52,24 @@ class _TubePilotAppState extends State<TubePilotApp> {
   StreamSubscription<Uri>? _linkSub;
   final LanguageProvider _languageProvider = LanguageProvider();
 
-  // Guards against handling the same OAuth callback link twice — e.g. if
-  // the app was cold-started BY the deep link, both getInitialLink() and
-  // the very first uriLinkStream event can sometimes deliver the same URI.
+  // ⚠️ FIX (notifications never arriving): AuthProvider used to be built
+  // inline via `ChangeNotifierProvider(create: (_) => AuthProvider())`,
+  // which meant nothing outside the widget tree could ever see when a user
+  // became logged in. PushService.initAfterLogin() — the method that
+  // actually registers this device's FCM token with the backend — existed
+  // in the codebase but was NEVER CALLED from anywhere. That's the whole
+  // bug: the backend had zero device tokens on file, so every
+  // sendPushToUser() call (Drive video going public, payment confirmed,
+  // etc.) silently had nothing to send to.
+  //
+  // Fix: keep our own reference to AuthProvider (like _languageProvider
+  // above), listen for it to report a logged-in user, and call
+  // PushService.initAfterLogin() at that point. This covers BOTH a fresh
+  // login/signup (auth.user flips null -> a value) and an already-logged-
+  // in user simply reopening the app (checked once immediately below).
+  final AuthProvider _authProvider = AuthProvider();
+  bool _pushInitDone = false;
+
   Uri? _lastHandledUri;
 
   @override
@@ -61,9 +77,24 @@ class _TubePilotAppState extends State<TubePilotApp> {
     super.initState();
     _initDeepLinks();
     _initOneSignalPlayerIdSync();
-    // Restore the last-selected language before first paint so the app
-    // doesn't flash English then switch — see LanguageProvider.loadSaved().
     _languageProvider.loadSaved();
+
+    _authProvider.addListener(_maybeInitPush);
+    _maybeInitPush(); // covers "already logged in, app just reopened"
+  }
+
+  void _maybeInitPush() {
+    final isLoggedIn = _authProvider.user != null;
+    if (!isLoggedIn) {
+      // Reset so switching accounts on the same device (logout -> a
+      // different login) re-registers the token under the new user
+      // instead of silently staying registered to nobody.
+      _pushInitDone = false;
+      return;
+    }
+    if (_pushInitDone) return;
+    _pushInitDone = true;
+    PushService.initAfterLogin();
   }
 
   void _initOneSignalPlayerIdSync() {
@@ -83,33 +114,15 @@ class _TubePilotAppState extends State<TubePilotApp> {
     }
   }
 
-  // Listens for "tubepilot://oauth-success" from YouTube, Google Drive, AND
-  // now Meta (Facebook/Instagram) connect flows. Query params tell us which:
-  // "youtube_connected", "drive_connected", "meta_connected". For Meta, an
-  // extra "multiple_pages" param tells us whether to show the Page picker.
-  //
-  // IMPORTANT: uriLinkStream ONLY delivers links that arrive while the
-  // listener is already registered (i.e. the app was alive in memory).
-  // If Android/iOS killed the app while the user was in the Custom Tab
-  // (common on low-memory devices, or after several seconds in the
-  // browser) and the OAuth redirect then COLD-STARTS the app, that first
-  // link is delivered via getInitialLink()/getInitialAppLink() instead —
-  // uriLinkStream never sees it. Without checking the initial link too,
-  // that cold-start callback is silently dropped, which is exactly what
-  // produced the empty-query "ghost" callback hits seen on the backend
-  // (the OS/browser still separately pinged the redirect URI, but the app
-  // never processed the result).
   Future<void> _initDeepLinks() async {
     try {
       final appLinks = AppLinks();
 
-      // 1) Handle the link that launched/cold-started the app, if any.
       final initialUri = await appLinks.getInitialLink();
       if (initialUri != null) {
         _handleDeepLink(initialUri);
       }
 
-      // 2) Handle any links that arrive while the app is already running.
       _linkSub = appLinks.uriLinkStream.listen(_handleDeepLink);
     } catch (e) {
       debugPrint('⚠️ Deep link listener failed to start: $e');
@@ -119,7 +132,6 @@ class _TubePilotAppState extends State<TubePilotApp> {
   void _handleDeepLink(Uri uri) {
     if (uri.scheme != 'tubepilot' || uri.host != 'oauth-success') return;
 
-    // Avoid double-handling the exact same callback URI (see note above).
     if (_lastHandledUri == uri) return;
     _lastHandledUri = uri;
 
@@ -154,8 +166,6 @@ class _TubePilotAppState extends State<TubePilotApp> {
       (route) => false,
     );
 
-    // If the user manages multiple Facebook Pages, send them straight
-    // to the picker so they can choose which one to connect.
     if (hasMetaParam && metaSuccess && metaMultiplePages) {
       navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const MetaPagePickerScreen()));
     }
@@ -164,6 +174,7 @@ class _TubePilotAppState extends State<TubePilotApp> {
   @override
   void dispose() {
     _linkSub?.cancel();
+    _authProvider.removeListener(_maybeInitPush);
     _languageProvider.dispose();
     super.dispose();
   }
@@ -173,7 +184,11 @@ class _TubePilotAppState extends State<TubePilotApp> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // Was `ChangeNotifierProvider(create: (_) => AuthProvider())` —
+        // switched to `.value` so this widget can hold and listen to the
+        // SAME instance (see _maybeInitPush above) instead of Provider
+        // creating a second, unreachable one internally.
+        ChangeNotifierProvider<AuthProvider>.value(value: _authProvider),
         ChangeNotifierProvider<LanguageProvider>.value(value: _languageProvider),
       ],
       child: Consumer<ThemeProvider>(

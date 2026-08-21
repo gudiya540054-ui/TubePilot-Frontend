@@ -43,6 +43,27 @@ dependencies:
   # Firebase above.
   onesignal_flutter: ^5.2.4
 
+  # Cashfree Payment Gateway — in-app Drop-in checkout SDK, used for
+  # diamond purchases (lib/screens/diamond_store_screen.dart). Fully
+  # replaces the old manual UPI/QR + screenshot + UTR flow.
+  #
+  # ⚠️ CORRECTED PACKAGE NAME: `cashfree_pg` (previously listed here) is a
+  # DIFFERENT, older/unrelated Cashfree package with a completely different
+  # API (token-based webview flow). The package matching the
+  # CFPaymentGatewayService / CFSessionBuilder / CFDropCheckoutPaymentBuilder
+  # API used in diamond_store_screen.dart is `flutter_cashfree_pg_sdk` —
+  # Cashfree's own currently-recommended Flutter SDK. Check pub.dev for a
+  # newer version before a release build if this one has aged.
+  flutter_cashfree_pg_sdk: ^2.4.0+52
+
+  # Media (photos/videos) permission prompt — requested proactively on the
+  # splash screen (screens/splash_screen.dart), same pattern as the push
+  # notification permission (PushService.initAfterLogin()). image_picker
+  # alone only triggers the system permission dialog reactively when the
+  # user taps "choose file" on the Upload screen — this makes it appear
+  # upfront instead, matching what notifications already did.
+  permission_handler: ^11.3.1
+
   # File pickers (thumbnail, video, and screenshot) - image_picker handles both
   # images and video, so we don't need the separate file_picker package
   # (which has a known Android build issue: "cannot find symbol FilePickerPlugin").
