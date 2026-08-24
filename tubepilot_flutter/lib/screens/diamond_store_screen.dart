@@ -10,14 +10,6 @@ import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../providers/language_provider.dart';
 
-// ⚠️ FIX: previous version imported from `package:cashfree_pg/...` and
-// declared `implements CFCallback` — neither is correct. The package that
-// actually exposes CFPaymentGatewayService / CFSessionBuilder /
-// CFDropCheckoutPaymentBuilder is `flutter_cashfree_pg_sdk` (see
-// pubspec.yaml), and its own official examples never implement a
-// CFCallback interface — setCallback() just takes two plain function
-// references matching (String orderId) and (CFErrorResponse, String
-// orderId). cfenums/cfexceptions also live under utils/, not api/.
 class DiamondStoreScreen extends StatefulWidget {
   const DiamondStoreScreen({super.key});
   @override
@@ -67,10 +59,12 @@ class _DiamondStoreScreenState extends State<DiamondStoreScreen> {
       // order response shows a normal error toast instead of crashing.
       try {
         final session = CFSessionBuilder()
-            // TODO: switch to CFEnvironment.PRODUCTION for release builds —
-            // must match CASHFREE_ENV on the backend, or checkout will fail
-            // with an "invalid session" style error.
-            .setEnvironment(CFEnvironment.SANDBOX)
+            // FIX: backend (CASHFREE_ENV on Render) runs in PROD, so the
+            // paymentSessionId it returns is a PRODUCTION session. This
+            // MUST match here or the Cashfree SDK closes the checkout
+            // sheet immediately with an "invalid session" style failure —
+            // that was the root cause of the instant-close bug.
+            .setEnvironment(CFEnvironment.PRODUCTION)
             .setOrderId(orderId)
             .setPaymentSessionId(paymentSessionId)
             .build();
